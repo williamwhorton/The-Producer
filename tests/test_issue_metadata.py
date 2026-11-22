@@ -49,6 +49,15 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(result["priority"], "High")
         self.assertEqual(result["type"], "Design Decision")
 
+    def test_new_issue_uses_structured_intake_not_title_prefix(self):
+        result = meta.parse_issue_metadata(
+            100, "Prototype lighting behavior",
+            "**Issue Type:** Task\n**Priority:** High\n**Workstream:** Architecture",
+        )
+        self.assertEqual(result["type"], "Task")
+        self.assertEqual(result["priority"], "High")
+        self.assertEqual(result["workstream"], ("Architecture",))
+
     def test_missing_values_not_guessed(self):
         result = meta.parse_issue_metadata(100, "Untyped", "No metadata")
         self.assertIsNone(result["type"])
