@@ -1,0 +1,47 @@
+name: Sync GitHub Project Status
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed]
+  workflow_dispatch:
+    inputs:
+      bootstrap_statuses:
+        description: 'Optional one-time overrides, e.g. 4=In Progress,5=Blocked,11=In Progress'
+        required: false
+        type: string
+        default: ''
+
+# The script runs exclusively from the trusted default branch. Never check out
+# PR head code in a pull_request_target workflow with a privileged secret.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+# Avoid conflicting updates from simultaneous PR, issue, and comment events.
+concurrency:
+  group: project-status-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # Issue comments on PRs are not issue status commands.
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request == null
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Update Project Status
+        env:
+          PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
+          BOOTSTRAP_STATUSES: ${{ inputs.bootstrap_statuses }}
+        run: python3 tools/sync_project_status.py
