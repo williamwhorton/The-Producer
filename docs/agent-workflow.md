@@ -28,6 +28,20 @@ This assignment is based on limited practical evidence rather than a broad model
 - **Qwen3.5 9B review:** identified one genuine fixture error but also proposed unnecessary fixes and missed known issues.
 - These are **human-reported local results**, not independently reproduced by this document. Exact gpt-oss inference load parameters and total intervention counts were not recorded uniformly; do not invent them. This exercise validated a useful baseline, not a rigorous comparative benchmark.
 
+## Direct tool access for local models (OpenCode V2)
+
+The local Developer and Reviewer profiles explicitly **deny the `execute` permission**. In OpenCode V2, `execute` is Code Mode: a JavaScript wrapper for discovering and invoking other tools, **not** a Unix shell. Denying it causes OpenCode to expose its underlying file and `shell` tools directly instead. This is intended to reduce tool-discovery confusion with the locally selected model. Individual permissions still apply; the Reviewer remains read-only and the Developer retains dangerous-command restrictions.
+
+**Tool-access smoke test, before Issue #13:**
+
+1. Refresh the local checkout of `main`; start a **new OpenCode session** with `producer-developer`, not the old session that saw `execute` only.
+2. Ask the agent to **actually call its direct shell tool** with `pwd`, `git status --short --branch`, `command -v gh`, and `gh issue view 13 --repo williamwhorton/The-Producer`. Require tool results, not claimed results. If the first call fails, do not continue the game implementation.
+3. If `shell` is absent even with Code Mode disabled, check selected agent/profile, effective configuration/permissions and whether the **built-in Build agent** can call shell in the same workspace. A tool-discovery problem is distinct from a missing executable.
+4. If shell runs but `gh` is missing, inspect the executable PATH in OpenCode Desktop's Flatpak/host runtime. If `gh` is present but issue viewing fails, diagnose GitHub authentication separately. Do not solve unavailable tools by pasting issue content and pretending file edits or tests can be executed.
+5. Repeat read-only shell/read checks with `producer-reviewer`; edits should remain denied.
+
+**Do not claim smoke-test success from these instructions alone.** Actual invocation is only verifiable in the user's OpenCode runtime. Relevant documentation: https://opencode.ai/docs/tools/ and https://opencode.ai/docs/permissions/.
+
 ## Issue intake and triage
 Follow [GitHub issue types, fields and priority conventions](project-board-setup.md).
 

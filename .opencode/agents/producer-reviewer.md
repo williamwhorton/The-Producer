@@ -2,6 +2,11 @@
 description: Read-only reviewer and QA; separate session from implementation
 mode: primary
 permissions:
+  # OpenCode V2: disable Code Mode's JS gateway so the local model receives
+  # shell/read/edit tools directly; nested permissions still apply.
+  - action: execute
+    resource: "*"
+    effect: deny
   - action: edit
     resource: "*"
     effect: deny

@@ -2,6 +2,11 @@
 description: Implements approved game features with focused tests and reliable tool use
 mode: primary
 permissions:
+  # OpenCode V2: disable Code Mode's JS gateway so the local model receives
+  # shell/read/edit tools directly; nested permissions still apply.
+  - action: execute
+    resource: "*"
+    effect: deny
   - action: shell
     resource: "git push *"
     effect: ask
