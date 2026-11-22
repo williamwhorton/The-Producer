@@ -20,6 +20,7 @@ An isometric psychological-horror management sandbox about running a reality sho
 - [Season outcomes and continuity](docs/systems/season-outcomes-and-continuity.md)
 - [Technical architecture constraints](docs/technical-architecture.md)
 - [Roadmap](docs/roadmap.md)
+- [Issue types, field visibility and priority conventions](docs/project-board-setup.md)
 - [Open decisions](docs/open-questions.md)
 - [ADR template](docs/decisions/ADR-template.md)
 
