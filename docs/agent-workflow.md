@@ -49,6 +49,18 @@ The automation and one-time setup are documented in [Project Status automation](
 - Posting `/status ...` requires an authenticated GitHub actor: only comments authored by the repository owner trigger updates. If tools cannot post, report the exact pending transition rather than silently assuming it occurred. The Creative Director should not need to watch the board.
 - Run the manual reconciliation workflow if an event is missed. Existing active statuses are preserved. It needs the Project token and number configured before it can succeed.
 
+## Issue-to-artifact verification gate
+
+Before starting a local assignment, both the Developer and the Reviewer must independently establish:
+
+1. **Exact issue:** authenticated `gh issue view ISSUE --repo williamwhorton/The-Producer` (or full user-provided issue text), with issue number, title, URL, expected deliverable and acceptance criteria. If neither source exists, stop; issue number alone is not enough for an offline agent.
+2. **Actual workspace:** repository, current branch, working tree state and baseline/PR diff. The reviewer must not simply review whatever files are already open.
+3. **Deliverable match:** a Godot prototype must contain relevant Godot project/scene/script files and Godot execution or manual inspection evidence; Python metadata tests only establish metadata functionality. Unrelated work cannot satisfy another issue, regardless of its passing tests.
+4. **Explicit evidence map:** each criterion must be marked met with observed proof, not verified, or unmet. Missing the primary deliverable is a blocking defect; Reviewer returns **Request Changes**. Failure to retrieve the issue or inspect the diff is **Unable to verify — not approved**.
+5. **Safe recovery:** when an agent starts on the wrong branch/issue, stop, report local changes and preserve them (no destructive reset/clean); start a fresh task-scoped context and dedicated branch before retrying.
+
+This check is intentionally lightweight and procedural; it doesn't authorize the agents to approve creative decisions or bypass human merging.
+
 ## Manual development cycle
 1. Creative Director approves the issue's scope, acceptance criteria and blocking decisions.
 2. Developer starts a **fresh session**, confirms the chosen model, reads relevant docs, works on a separate branch/worktree, implements and tests.
