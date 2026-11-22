@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       bootstrap_statuses:
-        description: 'Optional one-time overrides, e.g. 4=In Progress,5=Blocked,11=In Progress'
+        description: 'Optional one-time overrides for open issues, e.g. 4=In Progress,5=Blocked'
         required: false
         type: string
         default: ''
