@@ -69,6 +69,11 @@ Use **Urgent**, **High**, **Medium**, and **Low**. **Do not use P0/P1/P2** in ne
 
 Priority is **importance**, not severity, development effort or readiness. Do not automatically mark the next task Urgent. Prefer GitHub's existing Priority field where available rather than maintaining an inconsistent duplicate in the Project. When a field is project-scoped rather than issue-scoped in the active UI, establish a single authoritative location and document it.
 
+## Automated status updates
+See [GitHub Project Status automation](project-status-automation.md) for the repository workflow, owner-only `/status ...` commands, first-run bootstrap and required GitHub Actions secret/variable.
+
+The board is **not** expected to be maintained by the Creative Director manually. The Lead and working agents must publish verified status transitions at handoffs. Issue/PR lifecycle events drive Backlog, In Review, and Done when the automation is configured. The GitHub integration does not directly edit Projects-v2 fields; Actions performs those updates with an explicit Project-scoped secret.
+
 ## Project workflow
 
 Keep the board's **Status** values:
