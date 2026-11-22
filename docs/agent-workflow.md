@@ -37,6 +37,16 @@ Follow [GitHub issue types, fields and priority conventions](project-board-setup
 - Spikes gather evidence; Design Decisions require documented human approval before implementation.
 - Do not invent dates, effort estimates, approvals or completed checks.
 
+## GitHub Project status sync
+The automation and one-time setup are documented in [Project Status automation](project-status-automation.md). The board's **Status** field is an operational signal and must be maintained at each handoff, not at the end of a week.
+
+- New issues enter **Backlog** automatically. Lead marks approved/unblocked work **Ready** through an owner-authored issue comment containing only `/status Ready`.
+- When an agent starts on an issue, it posts `/status In Progress`. If a prerequisite prevents progress, the agent posts `/status Blocked` and describes the blocker in a separate issue comment or handoff. Resume with `/status In Progress`.
+- A non-draft PR with `Closes #N` in its body transitions the linked issue to **In Review**. The Reviewer may use `/status In Review` when no PR exists.
+- After Creative Director acceptance and issue closure, GitHub Actions moves it to **Done**. Closing or reopening an issue is never a substitute for human approval.
+- Posting `/status ...` requires an authenticated GitHub actor: only comments authored by the repository owner trigger updates. If tools cannot post, report the exact pending transition rather than silently assuming it occurred. The Creative Director should not need to watch the board.
+- Run the manual reconciliation workflow if an event is missed. Existing active statuses are preserved. It needs the Project token and number configured before it can succeed.
+
 ## Manual development cycle
 1. Creative Director approves the issue's scope, acceptance criteria and blocking decisions.
 2. Developer starts a **fresh session**, confirms the chosen model, reads relevant docs, works on a separate branch/worktree, implements and tests.
