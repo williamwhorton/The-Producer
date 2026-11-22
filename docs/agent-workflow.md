@@ -31,7 +31,9 @@ This assignment is based on limited practical evidence rather than a broad model
 ## Issue intake and triage
 Follow [GitHub issue types, fields and priority conventions](project-board-setup.md).
 
-- Issue Types: **Feature**, **Bug**, **Task**, **Spike**, **Design Decision**. Workstream is a separate domain classification.
+- **GitHub's native Issue Type**: **Feature**, **Bug**, **Task**, **Spike**, **Design Decision**; it is **not** a label, title prefix or Workstream. **Priority** and **Workstream** are existing issue custom fields and should be populated in the actual field UI/API, not represented only by issue-body prose.
+- **Executable Spike rule:** an approved investigation can explicitly require disposable code, test harnesses, scenes or measurements. The Developer carries out those acceptance criteria even when Type=Spike; do not use the issue type to decline authorized prototype work. A prototype does not establish a production engine, mechanics or architecture without Creative Director approval. In #13–#15 the correct Type is **Task**, with #4 as the broader investigative Spike.
+- On creating new issues, use the actual Issue Type/Priority/Workstream fields. When a connector cannot write them, supply `**Issue Type:** Task`, `**Priority:** High`, `**Workstream:** Architecture` (with appropriate values) as **temporary intake metadata** and verify GitHub Actions populates the fields. See [Issue metadata migration](issue-metadata-migration.md).
 - Priority: **Urgent / High / Medium / Low**. A High-priority issue can still be Blocked.
 - Before starting, check **Type**, **Status**, prerequisites, approval field, issue body and supporting ADR. A missing or inaccurate field cannot override human decision authority.
 - Spikes gather evidence; Design Decisions require documented human approval before implementation.
