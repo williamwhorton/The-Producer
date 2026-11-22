@@ -1,6 +1,8 @@
 name: Backfill Issue Type and Fields
 
 on:
+  issues:
+    types: [opened]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -19,7 +21,8 @@ on:
         type: boolean
         default: false
 
-# This workflow is an intentionally manual migration, not an issue-edit loop.
+# This workflow imports native metadata on issue creation and supports a
+# deliberately manual, dry-run-first migration of existing issues.
 # The only code executed is from the trusted default branch; no PR head checkout.
 permissions:
   contents: read
@@ -40,7 +43,7 @@ jobs:
       - name: Migrate native Issue Type, Priority, Workstream
         env:
           PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          ISSUE_NUMBERS: ${{ inputs.issue_numbers }}
-          REPLACE_EXISTING: ${{ inputs.replace_existing }}
+          DRY_RUN: ${{ github.event_name == 'issues' && 'false' || inputs.dry_run }}
+          ISSUE_NUMBERS: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_numbers }}
+          REPLACE_EXISTING: ${{ github.event_name == 'issues' && 'false' || inputs.replace_existing }}
         run: python3 tools/sync_issue_metadata.py
