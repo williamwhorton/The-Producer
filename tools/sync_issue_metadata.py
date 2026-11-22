@@ -70,7 +70,7 @@ def parse_issue_metadata(number, title, body):
     match = re.match(r"^\[([^\]]+)\]", title)
     category = match.group(1) if match else ""
     body_type = re.search(
-        r"\\*\\*(?:Issue )?Type:\\*\\*\\s*(Design Decision|Feature|Bug|Task|Spike)\\b",
+        r"\*\*(?:Issue )?Type:\*\*\s*(Design Decision|Feature|Bug|Task|Spike)\b",
         body, re.I,
     )
     declared_type = next(
