@@ -18,6 +18,13 @@
 7. Update documentation when an approved contract changes; create ADR for significant architecture decisions.
 8. Submit a PR with issue reference, summary, evidence, limitations and risks. Do not merge without configured review gates.
 
+## Issue classification and scheduling
+- Follow `docs/project-board-setup.md` for Issue Types, field pinning, priorities and board statuses.
+- Classify issues as **Feature**, **Bug**, **Task**, **Spike**, or **Design Decision**. Do not confuse Issue Type (kind of work) with Workstream (domain).
+- Use readable priorities **Urgent**, **High**, **Medium**, **Low**; do not create P0/P1/P2 values. Priority does not override Blocked status, issue dependencies or human-approval requirements.
+- Inspect Issue Type, Status, dependencies and approval evidence before beginning work. **Spikes** produce findings, not automatic feature implementation; **Design Decisions** require recorded human approval before changing game or architecture contracts.
+- Treat metadata field visibility as a UI convenience rather than implied permission or a value. Never invent priority, effort, dates or approval flags to fill gaps.
+
 ## Design invariants
 - The player controls production circumstances, **not contestant minds**.
 - The player cannot directly inspect private contestant beliefs, intentions, or exact internal meters in normal play.
