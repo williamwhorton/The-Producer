@@ -8,6 +8,13 @@
 - **Independent Reviewer/QA agent:** reviews changes against requirements, tests and privacy boundaries; does not approve its own implementation.
 - **Design/Narrative specialist (optional):** proposes mechanics, scenarios, characters and dialogue; proposals remain unapproved.
 
+## Local model selection and review independence
+- Use `docs/agent-workflow.md` and ADR-0001 for the current preferred local model and role handoffs. Model assignment is provisional and **not** embedded in each agent's permissions.
+- Developer and Reviewer may use the **same underlying model**, but must use separate, fresh sessions. The Reviewer inspects the actual code/diff and tests rather than inheriting the Developer's claims.
+- A model's review is an independent **session-level** technical recommendation, not a separate GitHub account's required approval or evidence of independent model-family reasoning.
+- Where warranted, obtain a cross-model second opinion, especially after unexplained failures or high-risk changes.
+- If a tool operation repeatedly fails, stop and report the blocker rather than looping. Report only real test outputs and verified tool actions.
+
 ## Mandatory workflow
 1. Read the assigned issue, `docs/vision.md`, relevant requirements, relevant system files and applicable ADRs.
 2. Identify ambiguities and dependencies before editing. Escalate material design questions.
