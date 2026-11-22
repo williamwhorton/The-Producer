@@ -14,6 +14,15 @@
 - `producer-architect` — architecture and engine comparisons.
 - `producer-lead` — requirements, issue breakdown and handoffs.
 
+## Issue intake and triage
+Follow [GitHub issue types, fields and priority conventions](project-board-setup.md).
+
+- Issue Types: **Feature**, **Bug**, **Task**, **Spike**, **Design Decision**. Types affect expected deliverables; Workstream is a separate domain classification.
+- Priority: **Urgent / High / Medium / Low**, not P0/P1/P2. A High-priority issue can still be Blocked.
+- Before starting an issue, check its **Type, Status, dependencies and Human Approval Required** field, plus approval evidence in the issue/ADR. A missing or incorrectly set field never overrides the Creative Director's approval authority.
+- Handle **Spikes** as evidence gathering; handle **Design Decisions** as proposed choices requiring recorded human approval. Do not treat a promising prototype or a proposed decision as authorization for production code.
+- Do not infer arbitrary effort values, due dates, approvals or requirement changes. Use issue fields where available and report any missing decision instead.
+
 ## Manual development cycle
 1. Human approves bounded GitHub issue and acceptance criteria.
 2. Developer uses a fresh session on a feature branch; reads relevant docs, implements and executes tests.
