@@ -9,7 +9,7 @@
 The **GitHub Project** is meant to show a credible route from the current design to a **releasable minimum viable product**, not just the next few coding tasks. Every necessary category of work must have a backlog issue or a documented dependency that will produce one. Existing issues should be extended rather than duplicated. New issues arise when genuine new work, defects, approved feature changes, prototype findings or release constraints justify them.
 
 **Do not confuse:**
-- **Engine spike** (#4, #13–#15): throwaway evidence, not production game architecture.
+- **Engine evaluation Spike** (#4), supported by three explicitly approved **executable Tasks** (#13–#15): disposable code and evidence, not a chosen production architecture. A Spike may also include runnable experimental code when its acceptance criteria require it.
 - **Vertical slice**: one playable representative sample used to prove the core loop.
 - **MVP** (#20): a small but coherent, distributable game with enough content, usability, persistence and quality for actual players. Exact release scope remains a **Creative Director decision**.
 
