@@ -25,7 +25,13 @@
 7. Update documentation when an approved contract changes; create ADR for significant architecture decisions.
 8. Submit a PR with issue reference, summary, evidence, limitations and risks. Do not merge without configured review gates.
 
-## Project board status discipline
+## MVP backlog completeness and parallel decision work
+- The Project Backlog must describe a credible path from current concept through a shippable, supported MVP, not just a list of upcoming coding tasks. See `docs/mvp-delivery-plan.md` for workstreams, milestones, dependencies, requirements coverage, release gates and identified issues.
+- The **Lead** owns continuous backlog coverage: review the approved player journeys and release requirements, identify missing deliverables, update existing issues first, and create bounded Features, Tasks, Spikes or Design Decisions for genuine gaps.
+- **Ready** includes independently actionable Creative Director design decisions and agent work. Human decision issues may be assigned to `williamwhorton` and worked **in parallel** with implementation. Ready authorizes *work on a decision*, not implementation of a decision's unapproved outcome.
+- Escalate unknowns that would force invented mechanics into a Spike or Design Decision. Never treat speculative acceptance criteria as approved gameplay; record downstream dependencies so implementations cannot silently proceed.
+- Keep the release path complete when scope changes: update issues, acceptance criteria, requirements/ADRs, and the delivery plan, clearly identifying approved deferrals.
+
 - The GitHub Project **Status** field must reflect work in real time. See `docs/project-status-automation.md` for status commands and the Actions automation.
 - On issue creation the workflow assigns **Backlog**. When approved work becomes executable, the Lead posts `/status Ready`; when an agent begins, it posts `/status In Progress`. A real dependency/blocker requires `/status Blocked` with the reason in the issue.
 - When a ready PR with `Closes #N` opens, the project workflow moves the referenced issue **In Review**; explicit `/status In Review` is available for non-PR review.

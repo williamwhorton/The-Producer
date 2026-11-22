@@ -74,7 +74,18 @@ See [GitHub Project Status automation](project-status-automation.md) for the rep
 
 The board is **not** expected to be maintained by the Creative Director manually. The Lead and working agents must publish verified status transitions at handoffs. Issue/PR lifecycle events drive Backlog, In Review, and Done when the automation is configured. The GitHub integration does not directly edit Projects-v2 fields; Actions performs those updates with an explicit Project-scoped secret.
 
-## Project workflow
+## Ready versus Backlog — including Creative Director decisions
+
+**Ready** means a bounded, approved-to-investigate **task, Spike or Design Decision can begin now** without needing an unfinished issue's deliverable. It is **not** limited to the next available agent implementation slot. The Creative Director may work Ready decision stories **concurrently** with Developer/Architect/Lead agents; assign those issues to `williamwhorton` so they are visible as human-owned decisions.
+
+- **Readiness is not creative approval.** An unblocked Design Decision can be Ready for research/decision while every implementation story that depends on its result remains in Backlog or Blocked.
+- **Backlog** contains concrete, traceable *future* MVP work across every function from design through release, including stories that are not yet Ready due to dependencies, sequencing or current priorities.
+- **Blocked** records an actual, specific impediment to work underway or selected for execution. An unscheduled future issue with dependencies can remain Backlog rather than cluttering Blocked.
+- **In Progress** begins only when work actually starts; **In Review** means review/approval awaits; **Done** needs acceptance.
+- Keep a **complete release path**, not merely a near-term sprint queue. The Lead maintains [MVP-to-release delivery plan](mvp-delivery-plan.md), reviews requirement coverage regularly, avoids duplicate issues, and adds bounded work/spikes when a real gap arises.
+- An independently startable Spike that unlocks later tasks can move Ready immediately, even if downstream work must wait; update dependencies and status after decisions land.
+- New work from design changes, prototype evidence, playtests and release review is added through normal issue triage; don't invent approvals, exact content counts, estimates or deadlines.
+
 
 Keep the board's **Status** values:
 

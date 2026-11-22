@@ -12,6 +12,9 @@ An isometric psychological-horror management sandbox about running a reality sho
 3. Separate CONFIRMED decisions from PROPOSED mechanics and OPEN questions.
 4. Work from an approved GitHub issue on a branch; provide tests and an independent review before proposing a merge.
 
+## Delivery roadmap
+The [MVP-to-release delivery plan](docs/mvp-delivery-plan.md) maps GitHub issues from design decisions and prototypes to a playable, tested, distributable MVP. The [high-level roadmap](docs/roadmap.md) summarizes phases. Creative Director decision stories can be Ready alongside agent work; Ready does not settle unapproved mechanics.
+
 ## Design reference
 - [Game design overview](docs/game-design.md)
 - [Contestant psychology and observations](docs/systems/contestants-and-observation.md)

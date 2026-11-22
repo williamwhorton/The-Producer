@@ -1,5 +1,10 @@
 # Development Roadmap and Vertical Slice
 
+> **MVP-to-release tracking:** [MVP delivery and dependency plan](mvp-delivery-plan.md) is the living work-item map, including Creative Director decisions, agent implementation, public-release readiness, and GitHub issue references. This roadmap describes development phases at a higher level; it is **not** the complete MVP backlog.
+>
+> **Distinction:** The Phase 3 vertical slice is a proof of the player loop. The MVP additionally requires the approved minimum multi-season experience, content, onboarding, save/resume, reliability, accessibility, offline distribution and release acceptance. See Issue #20 for the **unresolved** exact product scope.
+
+
 ## Phase 0 — Local agent reliability
 - Verify LM Studio local API and exact model IDs/quantization/context settings on Bazzite (RTX 3080 Ti 12 GB VRAM, 64 GB RAM).
 - Evaluate OpenCode + LM Studio with one agent first; measure tool reliability before introducing delegated roles.
