@@ -25,6 +25,14 @@
 7. Update documentation when an approved contract changes; create ADR for significant architecture decisions.
 8. Submit a PR with issue reference, summary, evidence, limitations and risks. Do not merge without configured review gates.
 
+## Project board status discipline
+- The GitHub Project **Status** field must reflect work in real time. See `docs/project-status-automation.md` for status commands and the Actions automation.
+- On issue creation the workflow assigns **Backlog**. When approved work becomes executable, the Lead posts `/status Ready`; when an agent begins, it posts `/status In Progress`. A real dependency/blocker requires `/status Blocked` with the reason in the issue.
+- When a ready PR with `Closes #N` opens, the project workflow moves the referenced issue **In Review**; explicit `/status In Review` is available for non-PR review.
+- After human acceptance, merge/close the issue; **Done** is driven by the issue-closed event, never an assertion that unaccepted work is finished.
+- An agent with GitHub CLI access may post the exact status command as a comment on the issue and **verify it succeeded**. If CLI/permissions fail, report the transition needed and arrange it through the authorized GitHub integration. Do not claim Project status changed until confirmed.
+- Workflow synchronization may require one-time configuration of `PROJECTS_TOKEN` and `PROJECT_NUMBER`. Do not expose token values or bypass approval to make automation work.
+
 ## Issue classification and scheduling
 - Follow `docs/project-board-setup.md` for Issue Types, field pinning, priorities and board statuses.
 - Classify issues as **Feature**, **Bug**, **Task**, **Spike**, or **Design Decision**. Do not confuse Issue Type (kind of work) with Workstream (domain).
