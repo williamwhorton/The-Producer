@@ -1,0 +1,27 @@
+name: Test Issue Metadata Migration
+
+on:
+  pull_request:
+    paths:
+      - 'tools/sync_issue_metadata.py'
+      - 'tests/test_issue_metadata.py'
+      - '.github/workflows/issue-metadata-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/sync_issue_metadata.py'
+      - 'tests/test_issue_metadata.py'
+      - '.github/workflows/issue-metadata-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run offline issue metadata unit tests
+        run: python3 -m unittest discover -s tests -p 'test_issue_metadata.py' -v

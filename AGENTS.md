@@ -43,7 +43,11 @@
 - Follow `docs/project-board-setup.md` for Issue Types, field pinning, priorities and board statuses.
 - Classify issues as **Feature**, **Bug**, **Task**, **Spike**, or **Design Decision**. Do not confuse Issue Type (kind of work) with Workstream (domain).
 - Use readable priorities **Urgent**, **High**, **Medium**, **Low**; do not create P0/P1/P2 values. Priority does not override Blocked status, issue dependencies or human-approval requirements.
-- Inspect Issue Type, Status, dependencies and approval evidence before beginning work. **Spikes** produce findings, not automatic feature implementation; **Design Decisions** require recorded human approval before changing game or architecture contracts.
+- Inspect native **Issue Type**, actual **Priority** and **Workstream** issue fields, Status, dependencies and approval evidence. These are separate fields; don't substitute title prefixes, labels or stale metadata in the issue body for field values.
+- **The assigned issue's approved deliverables and acceptance criteria govern the Developer's work, not the issue Type alone.** A Spike may explicitly call for a runnable **disposable prototype, scene, script or test harness** as evidence. Implement that bounded investigative code when the issue authorizes it; do not treat "Spike" as "no code." A Spike is **not** permission to commit production architecture/gameplay or treat a prototype as final.
+- **Tasks** can also be approved disposable implementations; #13, #14 and #15 are Tasks because producing a runnable Godot proof is their primary deliverable. #4 remains the overall architecture Spike.
+- **Design Decisions** require human approval before changing game or architecture contracts. The Lead should route runnable experimental work to the Developer regardless of whether the broader parent issue is a Spike.
+- When creating new issues, set native Issue Type and the actual Priority/Workstream issue fields. If the connected tool cannot, include a clearly marked intake metadata block (`**Issue Type:** Task`, `**Priority:** High`, `**Workstream:** Architecture`) for the GitHub Actions metadata intake workflow, and verify the fields populated; the intake text isn't a second source of truth.
 - Treat metadata field visibility as a UI convenience rather than implied permission or a value. Never invent priority, effort, dates or approval flags to fill gaps.
 
 ## Design invariants

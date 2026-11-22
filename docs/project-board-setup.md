@@ -9,14 +9,28 @@
 - **Project Status** records workflow progress on the GitHub Projects board. It is separate from Issue Type and Priority.
 - **Dependencies** determine whether work is ready. High priority is not permission to bypass a blocked decision.
 
+## Actual GitHub metadata fields — authoritative
+
+**Use GitHub's native Issue Type** for the nature of work and existing **Priority** and **Workstream issue fields** for classification. These are **not** GitHub labels and must not be recreated as prefix labels, parallel Project fields or duplicated descriptions.
+
+- **Type** determines whether an issue is a Feature, Bug, Task, Spike or Design Decision. It never, by itself, prohibits executable evidence: **Spikes may require intentionally throwaway code**; read the approved issue deliverable and acceptance criteria first.
+- **Priority** indicates importance: Urgent / High / Medium / Low.
+- **Workstream** identifies the product/engineering domain, not the issue type. Use an existing option; if no suitable option exists, request an option change rather than silently inventing one.
+- **Status** is the GitHub Project workflow stage and remains separately synchronized by `project-status-sync.yml`.
+- The old `[Spike]`, `[Task]`, `[Feature]` prefixes and free-form `**Priority:**`/`**Workstream:**` lines in older issue descriptions are **migration hints only**, not authoritative metadata.
+- For **new** issues created by a connector that cannot set fields, put a small `**Issue Type:** Task` / `**Priority:** High` / `**Workstream:** Architecture` block in the issue body. The secure [metadata workflow](issue-metadata-migration.md) imports it into the native fields. Confirm that the actual fields changed; do not assume because the text exists.
+- Only the Type, Priority and Workstream **field values** should be used for scheduling and reporting once migrated. A Developer must not skip implementation just because a Type is Spike when executable prototype code is specifically approved.
+
+**The approved runnable proofs #13, #14 and #15 are Tasks.** Their parent engine-comparison investigation #4 is a Spike. A general future Spike can still ask a Developer to write disposable experiment code.
+
 ## Issue Types
 
 | Type | When to use | Expected outcome |
 |---|---|---|
 | **Feature** | Implement approved player-facing or simulation behavior | Tested implementation meeting acceptance criteria |
 | **Bug** | Correct behavior that demonstrably violates an approved requirement | Reproduction, targeted fix, regression test |
-| **Task** | Concrete maintenance, infrastructure, tests, or bounded implementation preparation | Verified deliverable or completed procedure |
-| **Spike** | Time/budget-bounded investigation, comparison or throwaway prototype | Evidence, options, tradeoffs, recommendation; not automatically production code |
+| **Task** | Concrete maintenance, infrastructure, tests, implementation preparation or **approved executable proof** | Verified deliverable, runnable prototype where specified, or completed procedure |
+| **Spike** | Bounded investigation, comparison or experiment **that may require executable prototype code** | Measured evidence, reproductions/throwaway code if approved, options, tradeoffs and recommendation; no automatic production commitment |
 | **Design Decision** | Resolve a creative or major architecture question that requires approval | Recorded decision/ADR and downstream changes, after human approval |
 
 **Distinction:** A Spike supplies evidence; a Design Decision approves a direction. Neither silently authorizes implementing an unapproved feature.
@@ -33,7 +47,7 @@
 | #6 Supernatural autonomy and counterplay | Design Decision | Resolve proposed gameplay rules |
 | #7 Season outcomes and contestant exits | Design Decision | Resolve consequential creative/narrative rules |
 
-Existing GitHub issues may need their actual **Type** set manually; this table documents the intended classification, not a completed metadata migration.
+Existing GitHub issues have **native Type fields**; use the safe [metadata import](issue-metadata-migration.md) to fill or correct them. #13–#15 are explicit Task corrections, even if a previously entered Spike field still appears pending import.
 
 ## Issue-field pinning matrix
 
@@ -99,7 +113,7 @@ Do not automatically move issues to Done when a PR opens. Done requires acceptan
 
 1. Read the Type, Priority, Workstream, Status, approval field, issue body, dependencies and relevant decisions before planning.
 2. Do not select issues that are Blocked or require an unapproved design decision, regardless of priority.
-3. For a Spike, gather evidence; do not merge speculative production code as a side effect.
+3. For a Spike, gather evidence and **implement disposable experimental code when required by the approved issue**. Do not merge unapproved *production* code or canonize architecture as a side effect.
 4. For a Design Decision, present alternatives and wait for Creative Director approval before implementation.
 5. Do not fabricate field values, dates, approvals or estimates. If a crucial value is missing, make a recommendation and flag it.
 6. Avoid duplicate issue fields and project fields that can drift apart.

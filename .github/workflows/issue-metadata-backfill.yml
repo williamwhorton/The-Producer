@@ -1,0 +1,49 @@
+name: Backfill Issue Type and Fields
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Review proposed changes only; leave on for the first run'
+        required: true
+        type: boolean
+        default: true
+      issue_numbers:
+        description: 'Optional comma-separated issue numbers, e.g. 13,14,15; blank means all'
+        required: false
+        type: string
+        default: ''
+      replace_existing:
+        description: 'Overwrite populated Priority/Workstream fields for explicit issue numbers only'
+        required: true
+        type: boolean
+        default: false
+
+# This workflow imports native metadata on issue creation and supports a
+# deliberately manual, dry-run-first migration of existing issues.
+# The only code executed is from the trusted default branch; no PR head checkout.
+permissions:
+  contents: read
+
+concurrency:
+  group: issue-metadata-backfill
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Migrate native Issue Type, Priority, Workstream
+        env:
+          PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'issues' && 'false' || inputs.dry_run }}
+          ISSUE_NUMBERS: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_numbers }}
+          REPLACE_EXISTING: ${{ github.event_name == 'issues' && 'false' || inputs.replace_existing }}
+        run: python3 tools/sync_issue_metadata.py
