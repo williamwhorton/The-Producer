@@ -25,4 +25,4 @@ An isometric psychological-horror management sandbox about running a reality sho
 - [ADR template](docs/decisions/ADR-template.md)
 
 ## Local development
-OpenCode + LM Studio on Bazzite. Provisional agent roles: Gemma 4 12B QAT for architecture/implementation; Qwen3.5 9B for independent review. Model assignments are provisional and must be selected/verified in each desktop session. The engine and language have **not** been selected. See [agent workflow](docs/agent-workflow.md).
+OpenCode + LM Studio on Bazzite. **gpt-oss-20b** is the provisional preferred model for Developer, Reviewer, Architect, and Lead, each in a separate task-scoped session. Qwen3-Coder is optional for second opinions; model selection is manual and separate from the agent profile. The engine and language have **not** been selected. See [agent workflow](docs/agent-workflow.md) and [agent model decision (ADR-0001)](docs/decisions/ADR-0001-local-agent-model-selection.md).
