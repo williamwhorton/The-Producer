@@ -6,19 +6,132 @@
 
 This is an **issue-centric** workflow. GitHub Issues contain requirements and acceptance; the GitHub Project's **Status** field reports progress. Agents issue short status commands as part of work, rather than expecting the Creative Director to watch the board.
 
-## One-time setup (Creative Director)
+## One-time setup — complete walkthrough
 
-GitHub Actions' ordinary repository token does not have sufficient access to update user-owned Projects v2. This workflow needs a Project-enabled token. **Do not put it in the repository or in a chat.**
+The workflow is stored in `.github/workflows/project-status-sync.yml`, and it runs **in this repository** to update a **user-owned GitHub Project**. GitHub's standard `GITHUB_TOKEN` cannot perform the required personal Projects v2 field updates. A personal access token (classic) with `project` and `repo` scopes is the method documented by GitHub for this setup.
 
-1. Open your GitHub Project. Note the number at the end of its URL, e.g. `https://github.com/users/williamwhorton/projects/3` means `3`. This script assumes the Project is owned by the same **personal account** as the repository.
-2. Under **The-Producer → Settings → Secrets and variables → Actions → Variables**, create a **repository variable** named `PROJECT_NUMBER` containing that number.
-3. Under GitHub **Settings → Developer settings → Personal access tokens → Tokens (classic)**, create a token with `project` and `repo` scopes. Prefer a short expiration and rotate it as required. GitHub documents these scopes for Projects Actions integration; consider a dedicated GitHub App later if broader-token exposure is undesirable.
-4. Under **The-Producer → Settings → Secrets and variables → Actions → Secrets**, create a **repository secret** named `PROJECTS_TOKEN` and paste the token there, not into an issue or pull request. The workflow uses it only from the trusted default branch and never checks out PR-head code in a privileged context.
-5. Ensure the Project has a single-select field named **Status**, with **exactly named options** `Backlog`, `Ready`, `In Progress`, `In Review`, `Blocked`, and `Done` (additional options are fine).
-6. **After merging this PR**, go to **Actions → Sync GitHub Project Status → Run workflow**, and supply `4=In Progress,5=Blocked` in the `bootstrap_statuses` input for the **first** reconciliation. The run will mark closed issue #2 Done and other open issues Backlog unless they have an existing active Status. It will explicitly set #4 and #5 as above. **Do not supply these bootstrap overrides on later routine reconciliation runs**; they would overwrite newer statuses.
-7. Check that the workflow succeeded and verify #2, #4, and #5 on the board. **Until this completes, this automation is installed but not operationally validated.**
+**Do not share a personal access token in ChatGPT, an issue, PR, source file, commit, terminal transcript, or screenshot.** Store it only in the GitHub Actions **repository secret** described below. This is a one-time setup; regular board maintenance should then be automated.
 
-See [GitHub's official Projects Actions guide](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions) for token and project permissions.
+### Step 1 — Identify the Project number and verify Status options
+
+1. Sign in as `williamwhorton` on GitHub. Open **your profile → Your projects**, and open *The Producer* development board.
+2. Read the Project URL from the browser's address bar. For example, `https://github.com/users/williamwhorton/projects/3` has Project number **`3`**. Use **your actual number**, not the example. This is **not** an issue number, repository number, or project name.
+3. On the Project page, open the **top-right three-dot menu (⋯) → Settings**. Under **Fields**, locate the **Status** single-select field.
+4. Confirm that its option labels are **exactly** (including capitalization and spacing):
+   - `Backlog`
+   - `Ready`
+   - `In Progress`
+   - `In Review`
+   - `Blocked`
+   - `Done`
+5. Add or rename any missing options using the field editor, then **Save**. Do not create a second Status field; this workflow targets the field with the name `Status`. Additional options may exist, but all six listed are required.
+6. Confirm the Project belongs to your **personal user account**, rather than an organization. The script explicitly queries `user(login: "williamwhorton")`. Organization-owned Projects require a code adjustment before use.
+
+GitHub guide: [About single-select fields](https://docs.github.com/en/issues/planning-and-tracking-with-projects/understanding-fields/about-single-select-fields).
+
+### Step 2 — Create a personal access token (classic)
+
+The token must be created by a GitHub account that **has access to edit this Project and its repository** (normally `williamwhorton`).
+
+1. Click your **profile picture → Settings** on GitHub. These are your **personal account settings**, not the repository settings.
+2. Scroll down the left sidebar and select **Developer settings**.
+3. Select **Personal access tokens → Tokens (classic)**.
+4. Click **Generate new token → Generate new token (classic)**. Do **not** choose **Fine-grained tokens** for these instructions; the code and GitHub's example use a classic token.
+5. In **Note**, enter something recognizable, such as `The Producer — Project status sync`.
+6. Choose a limited **Expiration** (for example, **90 days**, or whatever period you intend to manage). When it expires, the sync will stop until you renew the token and replace the repository secret.
+7. Under **Select scopes**, select **`repo`** and **`project`**. You do **not** need to select unrelated scopes such as `admin:org`, `workflow`, or `delete_repo`.
+8. Scroll down and click **Generate token**.
+9. **Copy the token immediately** into a secure temporary location for the next step. GitHub does not let you retrieve the full token value after leaving this page.
+
+**Security tradeoff:** Classic PATs with `repo` can access more than this one repository, so this is a relatively broad credential. GitHub's official Projects + Actions documentation recommends `project` and `repo` for this pattern. Keep the token expiration limited, never expose it in logs, and consider replacing it with a narrowly scoped GitHub App if this workflow grows.
+
+Official references: [Creating a personal access token (classic)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) and [Automating Projects using Actions](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions).
+
+### Step 3 — Store the token as a repository Actions secret
+
+1. Open the **[The-Producer repository](https://github.com/williamwhorton/The-Producer)**.
+2. Select **Settings** in the repository's top navigation (if hidden, check the **⋯** menu).
+3. In the left sidebar, under **Security**, choose **Secrets and variables → Actions**.
+4. Select the **Secrets** tab.
+5. Under **Repository secrets**, click **New repository secret**.
+6. Enter **Name:** `PROJECTS_TOKEN` (all capitals, exactly as written).
+7. Enter **Secret:** paste the personal access token created in Step 2.
+8. Click **Add secret**.
+
+Do not place this token in a **Variable**, commit, issue, or PR. Once stored, its value is hidden. You may verify that the **name** `PROJECTS_TOKEN` appears, but GitHub will not display the secret's actual value.
+
+Shortcut: [The-Producer → Actions secrets and variables](https://github.com/williamwhorton/The-Producer/settings/secrets/actions).
+
+### Step 4 — Create the repository Actions variable
+
+On the same repository page:
+
+1. Open the **Variables** tab (beside Secrets).
+2. Under **Repository variables**, click **New repository variable**.
+3. Enter **Name:** `PROJECT_NUMBER` (all capitals, exactly as written).
+4. Enter **Value:** the **numeric Project number** from Step 1, for example `3` **only if your Project URL actually ends in `/3`**. No `#`, URL, quotes, or extra text.
+5. Click **Add variable**.
+
+The workflow reads `PROJECTS_TOKEN` from **Secrets** and `PROJECT_NUMBER` from **Variables**. Reversing these locations will prevent it from running.
+
+Shortcut: [The-Producer → Actions variables](https://github.com/williamwhorton/The-Producer/settings/variables/actions).
+
+### Step 5 — Merge PR #12; then run the initial synchronization
+
+**Do not attempt the initial run until PR #12 has merged into `main`.** The workflow's **Run workflow** control appears after the workflow file exists on the default branch. Merging PR #12 also closes Issue #11 because the PR contains `Closes #11`.
+
+1. Review and merge [PR #12](https://github.com/williamwhorton/The-Producer/pull/12) when satisfied with its code and permissions. (This is a human approval step, not automatic.)
+2. Open the repository's **Actions** tab.
+3. In the **All workflows** list on the left, click **Sync GitHub Project Status**.
+4. On the right, click **Run workflow**.
+5. Choose branch **`main`** in the workflow dropdown.
+6. In the input named **`bootstrap_statuses`**, enter exactly:
+
+   ```text
+   4=In Progress,5=Blocked
+   ```
+
+   This assigns the active architecture spike **#4** to In Progress and its dependent simulation work **#5** to Blocked. **Do not include #11:** merging this PR closes #11, and specifying `11=In Progress` for a closed issue makes reconciliation fail.
+7. Click the final **Run workflow** button to submit.
+8. Select the newest run; open its **sync** job and **Update Project Status** step. Confirm a green success check and inspect the logged `#N: previous -> new` transitions.
+9. Return to the Project board. Verify:
+   - Issue **#2** → **Done** (closed).
+   - Issue **#4** → **In Progress** (initial override).
+   - Issue **#5** → **Blocked** (initial override).
+   - Issue **#11** → **Done** (closed after this PR merges).
+   - Other open issues → **Backlog**, unless they had an existing non-Done status.
+
+Afterward, a new issue, an accepted closure, a linked PR, or an owner-authored `/status ...` comment triggers the workflow automatically.
+
+**Important:** `bootstrap_statuses` is an **override**, not a permanent configuration. **Leave it blank** on subsequent routine reconciliations unless you deliberately need to correct one specific issue. Otherwise a stale input can overwrite newer progress.
+
+GitHub guide: [Manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+
+### Step 6 — Confirm an ordinary status transition
+
+After the successful initial run, test the comment-driven path using a **non-destructive** transition on an open issue:
+
+1. Choose an open issue that should be in its current status (for example, **#4** while architecture work is active).
+2. Leave a **new, standalone issue comment** containing exactly `/status In Progress` (no markdown fence or extra prose). Post it while signed in as **`williamwhorton`**.
+3. Go to **Actions → Sync GitHub Project Status** and verify that the comment-triggered run succeeded.
+4. Confirm the issue remains **In Progress** on the Project board. Logs may say `already In Progress`, which counts as success.
+
+Only owner-authored standalone status comments trigger these changes. If an agent's GitHub CLI is not authenticated as `williamwhorton`, it must report the required transition rather than claim it changed the board.
+
+### Troubleshooting and credential maintenance
+
+| Symptom | Check |
+|---|---|
+| **No Run workflow button** | PR #12 must be merged; select the workflow from **Actions** on the repository and make sure Actions is enabled. The workflow must exist on `main`. |
+| **Missing PROJECTS_TOKEN** | Create the secret under **Repository Settings → Secrets and variables → Actions → Secrets**. Check the exact name; secret values cannot be viewed after creation. |
+| **Set PROJECT_NUMBER** | Create the variable under **Variables**, using digits from the **Project URL**, not an issue or repository number. |
+| **Project not found / token lacks access** | Verify the Project belongs to `williamwhorton`, the number is correct, token scopes include `project` and `repo`, and the token's account has edit access. |
+| **Status field / options missing** | Open the Project's settings and check the `Status` field's six exact option names. |
+| **Comment does not move a card** | The comment must be authored by `williamwhorton`, have exactly one `/status ...` command, and be on an **issue** rather than a PR conversation. Inspect the Actions run logs. |
+| **Token expired or revoked** | Generate a new classic PAT with `repo` and `project`, then **update** the `PROJECTS_TOKEN` repository secret. Never paste the old or new value into an issue. |
+| **First reconciliation fails** | Remove overrides for any **closed** issue; the workflow requires closed issues to stay **Done**. Re-run from the Actions tab after correcting configuration. |
+
+**Security and completion:** The secret must never appear in version control. The workflow checks out only trusted default-branch code, not untrusted PR-head code. Configuration is **not verified** until a successful Actions run is observed and the board reflects its results.
 
 ## Automatic transitions
 
