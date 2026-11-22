@@ -15,6 +15,13 @@
 - Where warranted, obtain a cross-model second opinion, especially after unexplained failures or high-risk changes.
 - If a tool operation repeatedly fails, stop and report the blocker rather than looping. Report only real test outputs and verified tool actions.
 
+## Mandatory issue identity and scope checks
+- **Before coding or reviewing**, verify the Git repository/worktree and fetch the **exact assigned issue** (number, title, URL, actual deliverable and acceptance criteria). If GitHub access is missing, require full explicitly supplied issue text; otherwise stop. Never infer requirements from title prefixes, nearby files, previous work, tests or chat context.
+- **Developer:** state the target issue and expected deliverable before edits, and map actual changed paths/tests to its acceptance criteria at handoff. Passing tests for a different issue is not evidence of completion.
+- **Reviewer:** independently fetch that same issue, inspect the real diff/artifacts, and map each required deliverable to evidence. If the implementation addresses a different issue or lacks the central deliverable, **Request Changes**; do not approve on the strength of unrelated test results. If it cannot inspect both issue and code, report `Unable to verify — not approved`.
+- A **Spike** may demand executable disposable code, but Issue **#13** specifically needs a runnable Godot 2D house prototype, **not** issue-field metadata tools. Issue **#64** is the metadata migration; never conflate these tasks.
+- Don't discard, overwrite or reset unexpected local changes while correcting a wrong-issue start. Report their branch/paths and isolate them safely.
+
 ## Mandatory workflow
 1. Read the assigned issue, `docs/vision.md`, relevant requirements, relevant system files and applicable ADRs.
 2. Identify ambiguities and dependencies before editing. Escalate material design questions.
