@@ -1,42 +1,56 @@
 # Local AI-agent workflow
 
-**Status:** Initial, manually coordinated and subject to validation.
+**Status:** Initial operating baseline; validated on a small utility task, not yet proven on game-system development. **Decision:** [ADR-0001](decisions/ADR-0001-local-agent-model-selection.md).
 
 ## Environment
-- Bazzite Linux; LM Studio provides the local OpenAI-compatible endpoint.
-- OpenCode Desktop is installed as Flatpak. Project agents live in `.opencode/agents/` within the checked-out repository. Verify that Desktop discovers them.
-- Never commit host-specific paths, tokens, model weights or credentials.
-- The selected model is separate from the agent profile unless an exact `provider/model` ID is explicitly set. Model IDs are intentionally not hard-coded.
+- Bazzite Linux; LM Studio exposes locally downloaded models to OpenCode.
+- OpenCode Desktop is installed as Flatpak. Project agent profiles live in `.opencode/agents/` and were confirmed visible in the Desktop selector.
+- Do not commit credentials, local model weights, machine-specific provider identifiers, or model file paths.
+- Agent **profile** and active **model** are separate selectors. The model is deliberately **not hard-coded** in profile frontmatter; verify it manually at the start of each session.
+- Use one active local model workload at a time unless concurrency has been explicitly validated with the available GPU/RAM.
 
-## Provisional assignments
-- `producer-developer` — Gemma 4 12B QAT, implementation and tests.
-- `producer-reviewer` — Qwen3.5 9B, independent QA.
-- `producer-architect` — architecture and engine comparisons.
-- `producer-lead` — requirements, issue breakdown and handoffs.
+## Current model assignments (provisional)
+| Role | Preferred model | Responsibilities |
+|---|---|---|
+| `producer-developer` | **gpt-oss-20b** | Implement approved issues, run tests, report real results |
+| `producer-reviewer` | **gpt-oss-20b** | Fresh-session, read-only technical review and QA |
+| `producer-architect` | **gpt-oss-20b** | Evaluate options, tradeoffs and ADRs; no implementation |
+| `producer-lead` | **gpt-oss-20b** | Plan issues and dependencies, prepare self-contained handoffs |
+
+**Optional second opinion:** Qwen3-Coder-30B-A3B-Instruct for complex or high-risk changes where a different model family adds value. Its initial review was very slow (~42 minutes on a small utility) and had speculative high-severity findings, so it is **not** the routine reviewer. The earlier Qwen3.5 9B reviewer and Gemma 4 12B QAT developer are **not** active default agents.
+
+This assignment is based on limited practical evidence rather than a broad model benchmark. Revisit reviewer selection only if real review quality, shared blind spots, tool failures, or throughput create problems.
+
+## Evidence from Issue #2 (reported in local sessions)
+- **gpt-oss-20b development:** completed a Markdown link-checker exercise in approximately **12 minutes**, with no reported tool errors, loops, or human rescue; reported unit tests passing. **Seven tests** were later reported passing during review.
+- **Qwen3-Coder review:** completed a review in approximately **42 minutes** and reported running seven passing tests; overall recommendation **Approve**. Some alleged high-priority risks lacked concrete failure cases and were assessed as low-value/speculative.
+- **Gemma attempt:** repeated tool-call loops, tool-identifier errors and unsuccessful recovery; the earlier Markdown checker implementation also failed three of four tests in the initial run.
+- **Qwen3.5 9B review:** identified one genuine fixture error but also proposed unnecessary fixes and missed known issues.
+- These are **human-reported local results**, not independently reproduced by this document. Exact gpt-oss inference load parameters and total intervention counts were not recorded uniformly; do not invent them. This exercise validated a useful baseline, not a rigorous comparative benchmark.
 
 ## Issue intake and triage
 Follow [GitHub issue types, fields and priority conventions](project-board-setup.md).
 
-- Issue Types: **Feature**, **Bug**, **Task**, **Spike**, **Design Decision**. Types affect expected deliverables; Workstream is a separate domain classification.
-- Priority: **Urgent / High / Medium / Low**, not P0/P1/P2. A High-priority issue can still be Blocked.
-- Before starting an issue, check its **Type, Status, dependencies and Human Approval Required** field, plus approval evidence in the issue/ADR. A missing or incorrectly set field never overrides the Creative Director's approval authority.
-- Handle **Spikes** as evidence gathering; handle **Design Decisions** as proposed choices requiring recorded human approval. Do not treat a promising prototype or a proposed decision as authorization for production code.
-- Do not infer arbitrary effort values, due dates, approvals or requirement changes. Use issue fields where available and report any missing decision instead.
+- Issue Types: **Feature**, **Bug**, **Task**, **Spike**, **Design Decision**. Workstream is a separate domain classification.
+- Priority: **Urgent / High / Medium / Low**. A High-priority issue can still be Blocked.
+- Before starting, check **Type**, **Status**, prerequisites, approval field, issue body and supporting ADR. A missing or inaccurate field cannot override human decision authority.
+- Spikes gather evidence; Design Decisions require documented human approval before implementation.
+- Do not invent dates, effort estimates, approvals or completed checks.
 
 ## Manual development cycle
-1. Human approves bounded GitHub issue and acceptance criteria.
-2. Developer uses a fresh session on a feature branch; reads relevant docs, implements and executes tests.
-3. Developer reports exact checks, results, commit and limitations.
-4. Reviewer independently examines actual code/diff against requirements in a fresh session; no modifications during review.
-5. Developer addresses substantiated findings and reruns checks.
-6. Human reviews the PR; no automatic merge while workflow is being validated.
+1. Creative Director approves the issue's scope, acceptance criteria and blocking decisions.
+2. Developer starts a **fresh session**, confirms the chosen model, reads relevant docs, works on a separate branch/worktree, implements and tests.
+3. Developer records commit/branch, actual test commands and results, failures, known limits and requested reviewer focus.
+4. Reviewer uses a **different fresh session** with **no Developer conversation history** and read-only permissions. Examine the actual diff/code and issue requirements; where permitted, run tests and suggest independent edge cases.
+5. Reviewer distinguishes **confirmed defects**, **unverified concerns**, and **optional enhancements**; cites exact file/line plus reproducible impact. Do not manufacture findings. Report **Approve / Request changes** as a **technical recommendation**.
+6. Developer resolves substantiated findings or records exceptions, reruns tests, and updates the PR.
+7. Creative Director reviews and merges the PR according to repository rules. No automatic merge while this workflow is being established.
 
-## Gemma-specific reliability
-Gemma previously confused restricted JavaScript `execute` with dedicated file/shell tools. The developer profile explicitly instructs direct `read`, `glob`, `grep`, `shell`, and `write`/`edit` usage. Never use Node.js `require("fs")` for filesystem access. Confirm stability over longer tasks.
+**Independence limitation:** Developer and Reviewer share the same underlying model, so a fresh context is not model-family independence. Compensate with actual tests, requirement-based review, negative cases, and explicit human acceptance. A review by a model operating through the user's GitHub credentials **does not count as approval by another GitHub account**. Required GitHub reviewer approvals may be zero for this solo project; maintain PR-only changes and appropriate CI gates when available.
 
-## Context and safety
-- Use one active model workload at a time until VRAM/model switching is validated.
-- Keep durable context in versioned docs, issues, ADRs, tests and PRs, not long conversations.
-- Never turn an illustrative mechanic into an approved requirement.
-- Do not silently add dependencies, publish releases, merge into main, or use paid cloud services.
-- Independent testing is required; self-authored green tests alone are not acceptance evidence.
+## Tool reliability and handoffs
+- Use tools actually exposed in OpenCode; do not invent call syntax or tool identifiers.
+- If a tool fails, inspect the result, correct the call, and stop/report the blocker after repeated identical failures. Do not enter a retry or self-talk loop.
+- Keep durable context in docs, GitHub issues, ADRs, test evidence and PRs—not in indefinite conversations.
+- Do not treat self-authored passing tests as the sole proof of correctness; avoid speculative fixes requested by a reviewer without a demonstrated need.
+- Do not add unapproved dependencies, change major design decisions, publish releases, or use paid cloud services.
