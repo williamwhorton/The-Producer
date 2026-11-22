@@ -69,7 +69,15 @@ def parse_issue_metadata(number, title, body):
     body = body or ""
     match = re.match(r"^\[([^\]]+)\]", title)
     category = match.group(1) if match else ""
-    typ = TYPE_OVERRIDES.get(number) or TYPE_PREFIX.get(category)
+    body_type = re.search(
+        r"\\*\\*(?:Issue )?Type:\\*\\*\\s*(Design Decision|Feature|Bug|Task|Spike)\\b",
+        body, re.I,
+    )
+    declared_type = next(
+        (value for value in VALID_TYPES if body_type and value.casefold() == body_type.group(1).casefold()),
+        None,
+    )
+    typ = TYPE_OVERRIDES.get(number) or declared_type or TYPE_PREFIX.get(category)
     if typ not in VALID_TYPES:
         typ = None
 
