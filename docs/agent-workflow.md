@@ -1,46 +1,39 @@
-# Local AI-agent workflow
+# AI-agent development workflow
 
-**Status:** Initial operating baseline; validated on a small utility task, not yet proven on game-system development. **Decision:** [ADR-0001](decisions/ADR-0001-local-agent-model-selection.md).
+**Status:** Cloud-first working baseline (provisional beyond the smoke test). **Decision:** [ADR-0003](decisions/ADR-0003-cloud-first-agent-development.md), which supersedes the local model choice in [ADR-0001](decisions/ADR-0001-local-agent-model-selection.md). This is a **development tooling** decision, not a production game-engine or in-game inference decision.
 
-## Environment
-- Bazzite Linux; LM Studio exposes locally downloaded models to OpenCode.
-- OpenCode Desktop is installed as Flatpak. Project agent profiles live in `.opencode/agents/` and were confirmed visible in the Desktop selector.
-- Do not commit credentials, local model weights, machine-specific provider identifiers, or model file paths.
-- Agent **profile** and active **model** are separate selectors. The model is deliberately **not hard-coded** in profile frontmatter; verify it manually at the start of each session.
-- Use one active local model workload at a time unless concurrency has been explicitly validated with the available GPU/RAM.
+## Environment and default setup
+- Bazzite Linux; OpenCode Desktop is installed as a Flatpak. The default **implementation agent is OpenCode's standard Build role using a cloud coding model connected through ChatGPT sign-in**. Verify the actual selected provider/model at each session start; model availability and plan limits may change.
+- The existing project-local profiles under `.opencode/agents/` remain available for specialized duties, but they were tuned in part for local-model tool compatibility. **Do not assume `producer-developer` is equivalent to the verified Build configuration.** Do not modify these profiles just to make a particular task appear successful.
+- Local LM Studio models are **not** routine development, lead, architect, or review defaults. They may be evaluated for optional bounded tasks, but local inference is no longer a dependency for project delivery.
+- Keep credentials, ChatGPT session tokens, API keys, provider secrets, model weights, and machine-specific local paths out of Git.
+- Cloud-based **development assistance** does not authorize cloud inference, cloud service dependencies, or paid API calls in the **shipped game**; game architecture decisions remain governed by their own requirements and approvals.
 
-## Current model assignments (provisional)
-| Role | Preferred model | Responsibilities |
+## Role assignments (provisional)
+| Responsibility | Default | Evidence and limits |
 |---|---|---|
-| `producer-developer` | **gpt-oss-20b** | Implement approved issues, run tests, report real results |
-| `producer-reviewer` | **gpt-oss-20b** | Fresh-session, read-only technical review and QA |
-| `producer-architect` | **gpt-oss-20b** | Evaluate options, tradeoffs and ADRs; no implementation |
-| `producer-lead` | **gpt-oss-20b** | Plan issues and dependencies, prepare self-contained handoffs |
+| Implementation and self-debugging | OpenCode **Build**, ChatGPT-connected cloud coding model | Successfully completed an independently launched, visually correct minimal Godot project in a reported ~2 minutes; larger tasks remain unproven |
+| Reviewer / QA | Fresh cloud-model session with **read-only** tools/permissions, separate from implementation | Review actual diff, exact issue and parent constraints; confirm errors independently where possible; no automatic approval |
+| Lead / Producer | Cloud assistant; project-specific role instructions as appropriate | Prepare bounded tasks and trace requirements; may not approve scope |
+| Architect | Cloud assistant; project-specific role instructions as appropriate | Evaluate tradeoffs and ADRs; cannot select production architecture without Creative Director approval |
+| Automated verification | Local Godot CLI, tests and CI | No LLM required; cannot substitute headless checks for rendered visual acceptance |
+| Creative Director | Human | Approves scope, accepts visual work, makes architecture decisions and merges PRs |
 
-**Optional second opinion:** Qwen3-Coder-30B-A3B-Instruct for complex or high-risk changes where a different model family adds value. Its initial review was very slow (~42 minutes on a small utility) and had speculative high-severity findings, so it is **not** the routine reviewer. The earlier Qwen3.5 9B reviewer and Gemma 4 12B QAT developer are **not** active default agents.
+A reviewer can share the **same underlying model** as the developer if it uses a **fresh independent session**, has read-only access, and inspects source code and actual evidence instead of inheriting the developer's claims. Cross-model review is optional, not a prerequisite. Existing specialized agent profiles must be checked for effective permissions before use.
 
-This assignment is based on limited practical evidence rather than a broad model benchmark. Revisit reviewer selection only if real review quality, shared blind spots, tool failures, or throughput create problems.
+## Evidence and rationale
+- Earlier local-model utility work showed some success, but the subsequent Issue #13 minimal Godot GUI assignment repeatedly failed despite direct tool access, execution errors and substantial human intervention. The reviewer also raised incorrect scope requirements and missed observable defects.
+- On **2026-11-23**, a **ChatGPT-connected cloud coding model in OpenCode Build** reportedly completed a separate minimal Godot capability test in **about two minutes**, with a successful independent launch and visible markers, and no implementation debugging required from the Creative Director.
+- **Both model and agent role changed**, and the tasks were not benchmark-controlled. The result establishes a practical working baseline, not proof that either component alone caused the improvement or that larger autonomous features will succeed.
+- Preserve the historical experiments and their limitations in ADR-0001. Prefer observed task completion and human intervention per accepted deliverable over parameter-count comparisons or theoretical throughput.
 
-## Evidence from Issue #2 (reported in local sessions)
-- **gpt-oss-20b development:** completed a Markdown link-checker exercise in approximately **12 minutes**, with no reported tool errors, loops, or human rescue; reported unit tests passing. **Seven tests** were later reported passing during review.
-- **Qwen3-Coder review:** completed a review in approximately **42 minutes** and reported running seven passing tests; overall recommendation **Approve**. Some alleged high-priority risks lacked concrete failure cases and were assessed as low-value/speculative.
-- **Gemma attempt:** repeated tool-call loops, tool-identifier errors and unsuccessful recovery; the earlier Markdown checker implementation also failed three of four tests in the initial run.
-- **Qwen3.5 9B review:** identified one genuine fixture error but also proposed unnecessary fixes and missed known issues.
-- These are **human-reported local results**, not independently reproduced by this document. Exact gpt-oss inference load parameters and total intervention counts were not recorded uniformly; do not invent them. This exercise validated a useful baseline, not a rigorous comparative benchmark.
-
-## Direct tool access for local models (OpenCode V2)
-
-The local Developer and Reviewer profiles explicitly **deny the `execute` permission**. In OpenCode V2, `execute` is Code Mode: a JavaScript wrapper for discovering and invoking other tools, **not** a Unix shell. Denying it causes OpenCode to expose its underlying file and `shell` tools directly instead. This is intended to reduce tool-discovery confusion with the locally selected model. Individual permissions still apply; the Reviewer remains read-only and the Developer retains dangerous-command restrictions.
-
-**Tool-access smoke test, before Issue #13:**
-
-1. Refresh the local checkout of `main`; start a **new OpenCode session** with `producer-developer`, not the old session that saw `execute` only.
-2. Ask the agent to **actually call its direct shell tool** with `pwd`, `git status --short --branch`, `command -v gh`, and `gh issue view 13 --repo williamwhorton/The-Producer`. Require tool results, not claimed results. If the first call fails, do not continue the game implementation.
-3. If `shell` is absent even with Code Mode disabled, check selected agent/profile, effective configuration/permissions and whether the **built-in Build agent** can call shell in the same workspace. A tool-discovery problem is distinct from a missing executable.
-4. If shell runs but `gh` is missing, inspect the executable PATH in OpenCode Desktop's Flatpak/host runtime. If `gh` is present but issue viewing fails, diagnose GitHub authentication separately. Do not solve unavailable tools by pasting issue content and pretending file edits or tests can be executed.
-5. Repeat read-only shell/read checks with `producer-reviewer`; edits should remain denied.
-
-**Do not claim smoke-test success from these instructions alone.** Actual invocation is only verifiable in the user's OpenCode runtime. Relevant documentation: https://opencode.ai/docs/tools/ and https://opencode.ai/docs/permissions/.
+## Cost and tool boundaries
+- **Preferred initial funding:** existing ChatGPT subscription through supported OpenCode sign-in, subject to subscription and usage limits. Sign-in does not imply unlimited access or unrestricted API billing.
+- **No paid API credits, automatic top-ups, new subscriptions, or paid provider fallback without explicit Creative Director approval.** Check the selected provider before running long tasks; report when plan limits or billing could force a change.
+- Use the built-in **Build** agent for the known working implementation path; do not transfer experimental local-model `execute`/tool-routing restrictions into Build without evidence of need.
+- At session start verify `git rev-parse --show-toplevel`, `git status --short --branch`, exact issue contents, and actual access to the intended Godot binary and required tools. Distinguish an OpenCode/Flatpak tool-access problem from a code defect.
+- For visual work, demand executable project configuration, real GUI launch, and **observed** content. A scene node in source code is not evidence that its sprite/shape actually renders. Use screenshot inspection when tooling permits; otherwise mark visual behavior unverified and leave it for explicit human inspection.
+- Limit repeated identical failures; after two unsuccessful attempts at the same underlying blocker, stop and report what failed and what is needed. Do not manufacture test results or repeatedly modify prompt templates to avoid a failed task.
 
 ## Issue intake and triage
 Follow [GitHub issue types, fields and priority conventions](project-board-setup.md).
@@ -65,9 +58,9 @@ The automation and one-time setup are documented in [Project Status automation](
 
 ## Issue-to-artifact verification gate
 
-Before starting a local assignment, both the Developer and the Reviewer must independently establish:
+Before starting an assignment, both the Developer and the Reviewer must independently establish:
 
-1. **Exact issue:** authenticated `gh issue view ISSUE --repo williamwhorton/The-Producer` (or full user-provided issue text), with issue number, title, URL, expected deliverable and acceptance criteria. If neither source exists, stop; issue number alone is not enough for an offline agent.
+1. **Exact issue:** authenticated `gh issue view ISSUE --repo williamwhorton/The-Producer` (or full user-provided issue text), with issue number, title, URL, expected deliverable and acceptance criteria. If neither source exists, stop; issue number alone is not enough without verified issue content.
 2. **Actual workspace:** repository, current branch, working tree state and baseline/PR diff. The reviewer must not simply review whatever files are already open.
 3. **Deliverable match:** a Godot prototype must contain relevant Godot project/scene/script files and Godot execution or manual inspection evidence; Python metadata tests only establish metadata functionality. Unrelated work cannot satisfy another issue, regardless of its passing tests.
 4. **Explicit evidence map:** each criterion must be marked met with observed proof, not verified, or unmet. Missing the primary deliverable is a blocking defect; Reviewer returns **Request Changes**. Failure to retrieve the issue or inspect the diff is **Unable to verify — not approved**.
@@ -75,20 +68,20 @@ Before starting a local assignment, both the Developer and the Reviewer must ind
 
 This check is intentionally lightweight and procedural; it doesn't authorize the agents to approve creative decisions or bypass human merging.
 
-## Manual development cycle
-1. Creative Director approves the issue's scope, acceptance criteria and blocking decisions.
-2. Developer starts a **fresh session**, confirms the chosen model, reads relevant docs, works on a separate branch/worktree, implements and tests.
-3. Developer records commit/branch, actual test commands and results, failures, known limits and requested reviewer focus.
-4. Reviewer uses a **different fresh session** with **no Developer conversation history** and read-only permissions. Examine the actual diff/code and issue requirements; where permitted, run tests and suggest independent edge cases.
-5. Reviewer distinguishes **confirmed defects**, **unverified concerns**, and **optional enhancements**; cites exact file/line plus reproducible impact. Do not manufacture findings. Report **Approve / Request changes** as a **technical recommendation**.
-6. Developer resolves substantiated findings or records exceptions, reruns tests, and updates the PR.
-7. Creative Director reviews and merges the PR according to repository rules. No automatic merge while this workflow is being established.
+## Development, verification and review cycle
+1. Creative Director approves scope and acceptance criteria. Lead prepares a bounded assignment that includes the *actual* requirements from the assigned issue and all authoritative parent fixtures; don't invent or silently widen criteria.
+2. Developer starts a **fresh Build session**, verifies its cloud model/provider and repository state, and uses a dedicated branch/worktree. Keep existing PRs and any uncommitted work intact.
+3. Developer implements, **runs** the Godot project or relevant tests, inspects actual errors, and fixes them. Confirm the main scene is independently launchable; for visible features, run a GUI check where tools allow it. A successful headless import is necessary when relevant but not sufficient to claim visual success.
+4. **Self-verification gate before review:** record the exact commands, actual results, files/commit, acceptance-criterion evidence map, GUI observations or explicitly unverified visuals, and outstanding blockers. If the primary deliverable cannot be demonstrated, **stop as blocked rather than requesting review**. Avoid more than two attempts at the same unresolved failure without escalation.
+5. Reviewer starts a **different fresh session** using verified read-only permissions. Independently fetch the issue (including its authoritative parent constraints), inspect the real diff and artifacts, and run permitted checks. Do not take developer assertions as verified evidence.
+6. Reviewer labels each finding **confirmed defect**, **plausible but unverified**, or **optional enhancement**, with file/line, reproducible impact and the requirement supporting a blocking claim. No invented requirements or changes beyond scope. Technical outcome: **Approve / Request changes / Unable to verify**.
+7. Developer addresses substantiated findings and reruns checks; Creative Director independently inspects visual deliverables, accepts or rejects the result, and controls merging. Do not auto-merge while the workflow is being established.
 
-**Independence limitation:** Developer and Reviewer share the same underlying model, so a fresh context is not model-family independence. Compensate with actual tests, requirement-based review, negative cases, and explicit human acceptance. A review by a model operating through the user's GitHub credentials **does not count as approval by another GitHub account**. Required GitHub reviewer approvals may be zero for this solo project; maintain PR-only changes and appropriate CI gates when available.
+**Review independence:** A fresh context is session-level independence, not model-family independence. A model acting through the repository owner's GitHub credentials does **not** count as approval by a separate GitHub user. PR-only changes, applicable CI, actual tests, and human acceptance remain the gates.
 
 ## Tool reliability and handoffs
 - Use tools actually exposed in OpenCode; do not invent call syntax or tool identifiers.
 - If a tool fails, inspect the result, correct the call, and stop/report the blocker after repeated identical failures. Do not enter a retry or self-talk loop.
 - Keep durable context in docs, GitHub issues, ADRs, test evidence and PRs—not in indefinite conversations.
 - Do not treat self-authored passing tests as the sole proof of correctness; avoid speculative fixes requested by a reviewer without a demonstrated need.
-- Do not add unapproved dependencies, change major design decisions, publish releases, or use paid cloud services.
+- Do not add unapproved dependencies, change major design decisions, publish releases, or incur additional paid API/service charges without Creative Director approval. Existing ChatGPT-connected development use is approved within the current subscription allowance.
