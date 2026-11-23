@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Supervised, single-issue OpenCode Build -> independent Reviewer pilot.
 
-Only the explicitly specified issue may run. No merging, destructive worktree
-cleanup, permission auto-approval, model fallback or paid API selection.
+Only the explicitly specified issue may run. No merging, forced cleanup, permission auto-approval, model fallback
+or paid API selection.
 """
 
 from __future__ import annotations
@@ -280,6 +280,113 @@ def preflight(repo: Path, issue: int, model: str) -> dict:
     return data
 
 
+
+def registered_worktrees(repo: Path) -> list[dict]:
+    entries = []
+    raw = run_cmd(["git", "worktree", "list", "--porcelain"], repo)
+    for record in raw.split("\n\n"):
+        item = {}
+        for line in record.splitlines():
+            key, _, value = line.partition(" ")
+            if key == "worktree":
+                item["path"] = Path(value).resolve()
+            elif key in ("branch", "HEAD", "detached"):
+                item[key] = value
+        if "path" in item:
+            entries.append(item)
+    return entries
+
+
+def worktree_in_use(path: Path) -> bool:
+    """Linux check: refuse removal while any process has cwd in the checkout."""
+    proc = Path("/proc")
+    if not proc.is_dir():
+        raise Blocked("Cannot verify active processes without /proc.")
+    for entry in proc.iterdir():
+        if not entry.name.isdigit() or int(entry.name) == os.getpid():
+            continue
+        try:
+            cwd = Path(os.readlink(entry / "cwd"))
+        except (OSError, PermissionError):
+            continue
+        if cwd == path or path in cwd.parents:
+            return True
+    return False
+
+
+def pr_preserves_head(repo: Path, branch: str, sha: str, merged_only: bool) -> bool:
+    results = json_cmd(["gh", "pr", "list", "--repo", REPOSITORY, "--state", "all",
+                        "--head", branch, "--limit", "100",
+                        "--json", "state,headRefName,headRefOid"], repo)
+    if not isinstance(results, list):
+        return False
+    allowed = ("MERGED",) if merged_only else ("OPEN", "CLOSED", "MERGED")
+    return any(p.get("headRefName") == branch and p.get("headRefOid") == sha
+               and p.get("state") in allowed for p in results)
+
+
+def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, list[str]]:
+    """Remove only inactive, clean, owned worktrees with safely preserved commits.
+
+    This deliberately never calls git worktree remove --force or deletes logs.
+    """
+    repo = repo.resolve()
+    known: set[Path] = set()
+    state_home = repo.parent / f".{repo.name}-agent-runs"
+    if state_home.is_dir():
+        for file in state_home.glob("issue-*/state.json"):
+            try:
+                state = json.loads(file.read_text())
+            except (OSError, ValueError):
+                continue
+            if issue is not None and state.get("issue") != issue:
+                continue
+            for name in ("development_worktree", "review_worktree"):
+                value = state.get(name)
+                if isinstance(value, str):
+                    known.add(Path(value).resolve())
+    removed, skipped = 0, []
+    for record in registered_worktrees(repo):
+        path = record["path"]
+        if path == repo or path.parent != repo.parent:
+            continue
+        name = path.name
+        is_review = name.startswith(repo.name + "-review-")
+        is_agent = name.startswith(repo.name + "-agent-")
+        is_legacy = bool(re.fullmatch(rf"{re.escape(repo.name)}-issue-\d+[-\w]*", name))
+        if not (is_review or is_agent or is_legacy):
+            continue
+        if issue is not None and path not in known:
+            continue
+        try:
+            if worktree_in_use(path):
+                raise Blocked("a running process is using this checkout")
+            if run_cmd(["git", "-C", str(path), "status", "--porcelain",
+                        "--untracked-files=all"], repo):
+                raise Blocked("uncommitted or untracked files exist")
+            ignored = run_cmd(["git", "-C", str(path), "status", "--porcelain",
+                               "--ignored", "--untracked-files=all"], repo)
+            extras = [line[3:] for line in ignored.splitlines() if line.startswith("!! ")]
+            if any(not (item == ".godot/" or item.startswith(".godot/")) for item in extras):
+                raise Blocked("ignored files outside disposable .godot cache")
+            head = run_cmd(["git", "-C", str(path), "rev-parse", "HEAD"], repo)
+            branch = record.get("branch", "").removeprefix("refs/heads/")
+            if is_review and "detached" in record:
+                pass
+            elif branch and pr_preserves_head(repo, branch, head, is_legacy):
+                pass
+            else:
+                raise Blocked("local commit is not verified on an eligible GitHub PR")
+            run_cmd(["git", "worktree", "remove", str(path)], repo, timeout=120)
+            removed += 1
+            print(f"CLEANED: {path}", flush=True)
+        except Blocked as exc:
+            skipped.append(f"{path}: {exc}")
+            print(f"RETAINED: {path} ({exc})", flush=True)
+    print(f"Worktree cleanup: {removed} removed, {len(skipped)} retained.", flush=True)
+    return removed, skipped
+
+
 def orchestrate(args: argparse.Namespace) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not repo.is_dir():
@@ -365,20 +472,44 @@ def orchestrate(args: argparse.Namespace) -> int:
     except Blocked as exc:
         write_state(state_file, phase="blocked", reason=str(exc))
         raise
+    finally:
+        try:
+            _, retained = cleanup_worktrees(repo, issue=issue)
+            write_state(state_file, cleanup_pending=retained)
+        except (Blocked, OSError) as exc:
+            print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
+            write_state(state_file, cleanup_pending=[str(exc)])
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("issue", type=int, help="approved GitHub issue number")
+    parser.add_argument("issue", type=int, nargs="?", help="approved GitHub issue number")
+    parser.add_argument("--cleanup-worktrees", action="store_true", help="clean idle completed worktrees")
     parser.add_argument("--repo", default=".", help="path to the main repository checkout")
-    parser.add_argument("--model", required=True, help="explicit OpenAI model ID from OpenCode")
+    parser.add_argument("--model", help="explicit OpenAI model ID from OpenCode")
     parser.add_argument("--dry-run", action="store_true", help="preflight only; no writes or AI runs")
     parser.add_argument("--approve-issue", action="store_true", help="authorize this issue's execution")
     parser.add_argument("--timeout-minutes", type=int, default=60,
                         help="timeout per model session (default: 60)")
     args = parser.parse_args(argv)
-    if args.issue < 1 or not 1 <= args.timeout_minutes <= 180:
-        parser.error("issue must be positive and timeout-minutes must be between 1 and 180")
+    if args.cleanup_worktrees:
+        if args.issue is not None or args.model or args.dry_run or args.approve_issue:
+            parser.error("--cleanup-worktrees takes no issue/model/approval arguments")
+        try:
+            repo = Path(args.repo).expanduser().resolve()
+            actual = Path(run_cmd(["git", "rev-parse", "--show-toplevel"], repo)).resolve()
+            if actual != repo or repo.name != "The-Producer":
+                raise Blocked("Cleanup must run from the main The-Producer checkout.")
+            remote = run_cmd(["git", "remote", "get-url", "origin"], repo)
+            if not re.search(r"(?:github\.com[:/])williamwhorton/The-Producer(?:\.git)?$", remote):
+                raise Blocked("Origin is not the expected The-Producer repository.")
+            _, retained = cleanup_worktrees(repo)
+            return 2 if retained else 0
+        except Blocked as exc:
+            print(f"BLOCKED: {exc}", file=sys.stderr)
+            return 2
+    if args.issue is None or args.issue < 1 or not args.model or not 1 <= args.timeout_minutes <= 180:
+        parser.error("provide ISSUE and --model; timeout must be 1–180 minutes")
     try:
         return orchestrate(args)
     except Blocked as exc:
