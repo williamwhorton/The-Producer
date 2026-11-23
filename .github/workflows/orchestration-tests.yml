@@ -1,0 +1,30 @@
+name: Orchestration unit tests
+
+on:
+  pull_request:
+    paths:
+      - 'tools/orchestrate.py'
+      - 'tests/test_orchestrate.py'
+      - '.github/workflows/orchestration-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/orchestrate.py'
+      - 'tests/test_orchestrate.py'
+      - '.github/workflows/orchestration-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax check
+        run: python -m py_compile tools/orchestrate.py tests/test_orchestrate.py
+      - name: Test supervised runner and safe cleanup
+        run: python -m unittest discover -s tests -p 'test_orchestrate.py' -v
