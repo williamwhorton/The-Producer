@@ -53,6 +53,7 @@ class ParserTests(unittest.TestCase):
             '## Human Testing\nTODO add steps later',
             '## Human Testing\n1. Run <exact command>. Expected: <specific result>.',
             '## Human Testing\n1. Check the thing.',
+            '## Human Testing\n1. Open the 3D application and look around at all rooms and markers.',
             '## Human Testing\nThe reviewer said it works and no manual check is needed.',
         ):
             with self.subTest(body=body), self.assertRaises(mod.Blocked):
