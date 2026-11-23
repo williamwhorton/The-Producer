@@ -15,6 +15,7 @@ const STEP_SECONDS := 0.85
 const WALL_HEIGHT := 1.45
 const CUT_HEIGHT := 0.20
 const SLAB_TOP := -0.035
+const TILE_WIDTH := 0.97
 
 # Fixture x/y map to Godot x/z. Godot y is elevation.
 var walls: Array[MeshInstance3D] = []
@@ -156,7 +157,8 @@ func build_floor(parent: Node3D, bounds: Rect2i) -> void:
 			var cell := Vector2i(x, y)
 			var room := UPPER_ROOM if parent == upper else ground_room_at(cell)
 			var color: Color = Color("#46535d") if room < 0 else ROOM_COLORS[room]
-			box(parent, cell_center(cell, -0.0175), Vector3(0.97, 0.035, 0.97), color)
+			box(parent, cell_center(cell, SLAB_TOP / 2.0),
+				Vector3(TILE_WIDTH, -SLAB_TOP, TILE_WIDTH), color)
 
 
 func add_perimeter(parent: Node3D, bounds: Rect2i) -> void:
@@ -251,21 +253,31 @@ func add_mesh(parent: Node3D, mesh: PrimitiveMesh, at: Vector3, color: Color) ->
 
 
 func pick_room(origin: Vector3, direction: Vector3) -> int:
-	# Ray-test the same boxes that render, so neither lowered nor hidden walls
-	# leave invisible click blockers. Decorations and marker pegs are click-through.
+	# Use visible geometry, so lowered or hidden walls don't leave click
+	# blockers. Decorations and marker pegs are click-through.
 	var closest := camera.far * camera.far
 	var room := -1
 	for slab in slabs:
 		if not slab.is_visible_in_tree():
 			continue
-		var hit: Variant = (slab.global_transform * slab.get_aabb()).intersects_ray(origin, direction)
+		var bounds: AABB = slab.global_transform * slab.get_aabb()
+		var hit: Variant = bounds.intersects_ray(origin, direction)
+		var floor_height := slab.get_parent_node_3d().global_position.y
+		# Prefer the tile top where the ray actually lands on the inset face.
+		# Between tiles, fall back to the slab; its sides still block clicks.
+		if direction.y < 0.0:
+			var face: Variant = Plane(Vector3.UP, floor_height).intersects_ray(origin, direction)
+			if face != null:
+				var point := Vector2(face.x, face.z)
+				var footprint := Rect2(bounds.position.x, bounds.position.z, bounds.size.x, bounds.size.z)
+				var offset := (point - point.floor() - Vector2(0.5, 0.5)).abs()
+				if footprint.has_point(point) and maxf(offset.x, offset.y) <= TILE_WIDTH / 2.0:
+					hit = face
 		if hit == null or origin.distance_squared_to(hit) >= closest:
 			continue
 		closest = origin.distance_squared_to(hit)
-		# The inset tile faces are a thin veneer. Pick on the continuous
-		# slab top (including grout), but do not select when hitting its side.
 		room = -1
-		if is_equal_approx(hit.y, slab.global_position.y + 0.125):
+		if is_equal_approx(hit.y, floor_height) or is_equal_approx(hit.y, bounds.end.y):
 			room = UPPER_ROOM if slab.get_parent() == upper else ground_room_at(
 				Vector2i(floori(hit.x), floori(hit.z)))
 	for wall in walls:

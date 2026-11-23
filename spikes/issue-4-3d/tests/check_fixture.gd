@@ -35,6 +35,13 @@ func run() -> void:
 				"Ground selection at (%d,%d)" % [x, y])
 	check(house.pick_room(Vector3(-1, 10, -1), Vector3.DOWN) == -1, "Miss clears selection")
 
+	# This visible A tile is near both inset edges. The same ray reaches the
+	# lower slab in the rim instead, so a slab-only test misses the room.
+	var edge_direction: Vector3 = -house.camera.global_transform.basis.z
+	var edge_origin := Vector3(1.03, 0, 7.51) - edge_direction * 20.0
+	check(house.pick_room(edge_origin, edge_direction) == 0, "Oblique click selects A at the tile edge")
+	check(house.pick_room(Vector3(2, 10, 7.5), Vector3.DOWN) == 0, "Grout within A selects A")
+
 	check_walls(house)
 	var marker_positions := [Vector3(2.5, 0, 2.5), Vector3(6.5, 0, 2.5), Vector3(7.5, 0, 7.5)]
 	check(house.markers.size() == marker_positions.size(), "Exactly three markers")
