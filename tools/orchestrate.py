@@ -332,6 +332,7 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
     """
     repo = repo.resolve()
     known: set[Path] = set()
+    review_heads: dict[Path, str] = {}
     state_home = repo.parent / f".{repo.name}-agent-runs"
     if state_home.is_dir():
         for file in state_home.glob("issue-*/state.json"):
@@ -345,9 +346,14 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
                 value = state.get(name)
                 if isinstance(value, str):
                     known.add(Path(value).resolve())
+            if isinstance(state.get("review_worktree"), str) and isinstance(state.get("head_sha"), str):
+                review_heads[Path(state["review_worktree"]).resolve()] = state["head_sha"]
             for prior in state.get("review_worktrees", []):
                 if isinstance(prior, dict) and isinstance(prior.get("path"), str):
-                    known.add(Path(prior["path"]).resolve())
+                    recorded = Path(prior["path"]).resolve()
+                    known.add(recorded)
+                    if isinstance(prior.get("sha"), str):
+                        review_heads[recorded] = prior["sha"]
     removed, skipped = 0, []
     for record in registered_worktrees(repo):
         path = record["path"]
@@ -375,7 +381,8 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
             head = run_cmd(["git", "-C", str(path), "rev-parse", "HEAD"], repo)
             branch = record.get("branch", "").removeprefix("refs/heads/")
             if is_review and "detached" in record:
-                pass
+                if review_heads.get(path) != head:
+                    raise Blocked("detached review commit not verified in runner state")
             elif branch and pr_preserves_head(repo, branch, head, is_legacy):
                 pass
             elif (branch and is_agent and not is_legacy and
@@ -488,7 +495,7 @@ def orchestrate(args: argparse.Namespace) -> int:
         raise
     finally:
         try:
-            _, retained = cleanup_worktrees(repo, issue=issue)
+            _, retained = cleanup_worktrees(repo)
             write_state(state_file, cleanup_pending=retained)
         except (Blocked, OSError) as exc:
             print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
