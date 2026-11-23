@@ -86,6 +86,25 @@ def existing_prs(issue: int, cwd: Path) -> None:
                           "review it rather than creating duplicate work.")
 
 
+def validate_human_testing(body: str) -> None:
+    """Require actionable human acceptance steps in every runner-generated PR.
+
+    This validates presence and a minimal structure, not quality or truthfulness.
+    """
+    match = re.search(
+        r"(?ims)^#{1,4}\s+Human Testing(?: Instructions)?\s*$\n(.*?)(?=^#{1,4}\s|\Z)",
+        body,
+    )
+    if not match:
+        raise Blocked("PR body must contain a ## Human Testing section with reproducible steps.")
+    section = match.group(1).strip()
+    if (len(section) < 45
+            or not re.search(r"(?m)^\s*(?:[-*]|\d+[.)])\s+\S", section)
+            or re.search(r"(?i)<(?:exact command|feature or behavior|observable result|specific result)>|REPLACE WITH|\bTODO\b|\bTBD\b", section)):
+        raise Blocked("Human Testing must contain non-placeholder, actionable steps "
+                      "and expected outcomes; include exact commands where applicable.")
+
+
 def pr_details(branch: str, issue: int, cwd: Path) -> dict:
     matches = json_cmd(["gh", "pr", "list", "--repo", REPOSITORY, "--state", "open",
                         "--head", branch, "--json", "number"], cwd)
@@ -106,6 +125,7 @@ def pr_details(branch: str, issue: int, cwd: Path) -> dict:
         raise Blocked("PR has no changed files; no deliverable exists to review.")
     if not re.search(r"(?im)^#{1,4}\s*(?:evidence|verification|test(?:s| results)?)\b", pr.get("body") or ""):
         raise Blocked("PR description lacks an Evidence/Verification/Tests section.")
+    validate_human_testing(pr.get("body") or "")
     return pr
 
 
@@ -207,7 +227,9 @@ def developer_prompt(issue: int, branch: str) -> str:
             "actual issue, all authoritative parent fixtures, and approval scope. "
             "Implement, execute real tests and GUI inspection where available, "
             "document actual evidence, push this branch and open one non-draft PR "
-            f"to main whose body contains 'Closes #{issue}' and an Evidence section. "
+            f"to main whose body contains 'Closes #{issue}', an Evidence section, "
+            "and a ## Human Testing section containing exact launch/test commands "
+            "when applicable, step-by-step manual checks, and expected results. "
             "Do not merge or change unrelated files. If blocked, report the blocker. "
             "Do not invent test evidence or imply visual inspection happened if it did not.")
 
@@ -218,7 +240,9 @@ def correction_prompt(issue: int, pr: dict, review_text: str) -> str:
     return (f"Correct verified findings on PR #{pr['number']} for Issue #{issue}. "
             "Review independent QA notes below and fix only substantiated issues; "
             "rerun appropriate tests, update the existing branch and PR evidence, "
-            "and do not merge. If findings are incorrect, document concrete proof.\n\n"
+            "and do not merge. Preserve or update the PR's ## Human Testing "
+            "steps with accurate commands and expected results. "
+            "If findings are incorrect, document concrete proof.\n\n"
             f"Independent review:\n{review_text[-18000:]}")
 
 
