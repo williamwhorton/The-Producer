@@ -10,6 +10,9 @@ var selected_room_index : int = 0
 var room_markers : Dictionary = {}  # "RoomA", "RoomB", "RoomC" -> marker nodes
 var marker_positions : Array[Vector2] = []
 
+@onready var MarkerA: CharacterBody2D = null
+@onready var MarkerB: CharacterBody2D = null
+
 func _ready():
 	set_process_input(true)
 	# Initialize marker positions for demo (two connected cells in Room A and B)
@@ -17,22 +20,19 @@ func _ready():
 	marker_positions.append(Vector2(4 * TILE_SIZE, TILE_SIZE))   # Cell in Room B - hardcoded demo position
 	
 	# Connect to markers to set their targets
-	if has_node("MarkerA"):
-		var maroon = MarkerA.get_node_or_null("MarkerA") as CharacterBody2D
-		if maroon:
-			maroon.target_position = marker_positions[0] if marker_positions.size() > 0 else position
-	
-	if has_node("MarkerB"):
-		var contestant = MarkerB.get_node_or_null("MarkerB") as CharacterBody2D
-		if contestant:
-			contestant.target_position = marker_positions[1] if marker_positions.size() > 1 else position
+	var maroon := MarkerA.get_node_or_null("MarkerA") as CharacterBody2D
+	var contestant := MarkerB.get_node_or_null("MarkerB") as CharacterBody2D
+	if maroon:
+		maroon.target_position = marker_positions[0] if marker_positions.size() > 0 else position
+	if contestant:
+		contestant.target_position = marker_positions[1] if marker_positions.size() > 1 else position
 	
 	# No supernatural marker in this prototype (Issue #13 scope)
 	
 	update()
 
 func _input(event):
-	if event is InputEventMouseMotion and event.button_mask & BUTTON_MASK_RIGHT:
+	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
 		# Pan camera by moving the node
 		position -= event.relative * 0.01
 	elif event is InputEventMouseButton and event.is_pressed() and event.button_index == MOUSE_BUTTON_WHEEL_UP:
