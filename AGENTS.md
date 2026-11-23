@@ -2,14 +2,14 @@
 
 ## Authority and roles
 - **Creative Director (human):** owns the game's identity, mechanics, narrative direction, scope, major technical choices, and final acceptance.
-- **Lead/Producer agent:** decomposes approved goals, tracks dependencies, coordinates handoffs, and escalates decisions. Cannot approve new game mechanics.
+- **Lead/Producer agent:** maintains MVP backlog coverage, decomposes approved goals, tracks dependencies, coordinates Developer/Reviewer handoffs, and escalates decisions. Cannot approve new game mechanics, make final architecture decisions, or merge PRs. Automatic dispatch requires a separately implemented and verified runner; agent instructions alone do not start independent sessions.
 - **Architect agent:** evaluates engines, interfaces, data models, risks, and ADRs; proposals require approval before major commitments.
 - **Developer agent:** implements bounded approved issues and tests. Cannot silently simplify mechanics or expand scope.
 - **Independent Reviewer/QA agent:** reviews changes against requirements, tests and privacy boundaries; does not approve its own implementation.
 - **Design/Narrative specialist (optional):** proposes mechanics, scenarios, characters and dialogue; proposals remain unapproved.
 
 ## Model selection and review independence
-- Use `docs/agent-workflow.md` and [ADR-0003](docs/decisions/ADR-0003-cloud-first-agent-development.md) for the **cloud-first development workflow**. ADR-0003 supersedes ADR-0001's local-model defaults. The validated implementation baseline is **OpenCode Build with a ChatGPT-connected cloud model**; specialized profiles remain optional and have distinct tool permissions. Do not hard-code provider IDs or treat model selection as a gameplay-engine decision.
+- Use `docs/agent-workflow.md`, [the proposed Lead orchestration plan](docs/agent-orchestration.md), and [ADR-0003](docs/decisions/ADR-0003-cloud-first-agent-development.md) for the **cloud-first development workflow**. ADR-0003 supersedes ADR-0001's local-model defaults. The validated implementation baseline is **OpenCode Build with a ChatGPT-connected cloud model**; specialized profiles remain optional and have distinct tool permissions. Do not hard-code provider IDs or treat model selection as a gameplay-engine decision.
 - Developer and Reviewer may use the **same underlying model**, but must use separate, fresh sessions. The Reviewer inspects the actual code/diff and tests rather than inheriting the Developer's claims.
 - A model's review is an independent **session-level** technical recommendation, not a separate GitHub account's required approval or evidence of independent model-family reasoning.
 - Where warranted, obtain a cross-model second opinion, especially after unexplained failures or high-risk changes.
@@ -21,6 +21,12 @@
 - **Reviewer:** independently fetch that same issue, inspect the real diff/artifacts, and map each required deliverable to evidence. If the implementation addresses a different issue or lacks the central deliverable, **Request Changes**; do not approve on the strength of unrelated test results. If it cannot inspect both issue and code, report `Unable to verify — not approved`.
 - A **Spike** may demand executable disposable code, but Issue **#13** specifically needs a runnable Godot 2D house prototype, **not** issue-field metadata tools. Issue **#64** is the metadata migration; never conflate these tasks.
 - Don't discard, overwrite or reset unexpected local changes while correcting a wrong-issue start. Report their branch/paths and isolate them safely.
+
+## Agent dispatch boundaries
+- **OpenCode runs in the Creative Director's terminal, not a Flatpak sandbox.** The installed CLI version, authentication, and supported flags must be verified locally before any runner is implemented.
+- Until a runner is implemented and verified, handoffs use separate manually started OpenCode sessions. Do not state that the Lead automatically dispatched, monitored, or independently reviewed work unless there is actual session/execution evidence.
+- When orchestration is introduced, preserve the verified standard Build primary agent for development. Reviewer must have a fresh context and effective read-only permissions, preferably a separate disposable review checkout. Share issue IDs, PR URLs, commits, test evidence, and review findings through durable artifacts, not by treating developer assertions as proof.
+- Orchestration must not bypass permission prompts, incur unapproved charges, select unapproved backlog work, silently delete worktrees, or merge PRs. Escalate missing permissions, failed verification and decisions to the Creative Director.
 
 ## Mandatory workflow
 1. Read the assigned issue, `docs/vision.md`, relevant requirements, relevant system files and applicable ADRs.

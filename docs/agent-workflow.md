@@ -3,7 +3,7 @@
 **Status:** Cloud-first working baseline (provisional beyond the smoke test). **Decision:** [ADR-0003](decisions/ADR-0003-cloud-first-agent-development.md), which supersedes the local model choice in [ADR-0001](decisions/ADR-0001-local-agent-model-selection.md). This is a **development tooling** decision, not a production game-engine or in-game inference decision.
 
 ## Environment and default setup
-- Bazzite Linux; OpenCode Desktop is installed as a Flatpak. The default **implementation agent is OpenCode's standard Build role using a cloud coding model connected through ChatGPT sign-in**. Verify the actual selected provider/model at each session start; model availability and plan limits may change.
+- Bazzite Linux; the Creative Director runs **OpenCode from the terminal (native CLI, not Flatpak)**. The default **implementation agent is OpenCode's standard Build role using a cloud coding model connected through ChatGPT sign-in**. Verify the actual selected provider/model at each session start; model availability and plan limits may change.
 - The existing project-local profiles under `.opencode/agents/` remain available for specialized duties, but they were tuned in part for local-model tool compatibility. **Do not assume `producer-developer` is equivalent to the verified Build configuration.** Do not modify these profiles just to make a particular task appear successful.
 - Local LM Studio models are **not** routine development, lead, architect, or review defaults. They may be evaluated for optional bounded tasks, but local inference is no longer a dependency for project delivery.
 - Keep credentials, ChatGPT session tokens, API keys, provider secrets, model weights, and machine-specific local paths out of Git.
@@ -12,9 +12,9 @@
 ## Role assignments (provisional)
 | Responsibility | Default | Evidence and limits |
 |---|---|---|
-| Implementation and self-debugging | OpenCode **Build**, ChatGPT-connected cloud coding model | Successfully completed an independently launched, visually correct minimal Godot project in a reported ~2 minutes; larger tasks remain unproven |
+| Implementation and self-debugging | OpenCode **Build**, ChatGPT-connected cloud coding model | The reported ~2-minute minimal Godot test passed; the Issue #13 corrective 2D prototype was independently reviewed, launched on the Creative Director's Linux desktop, and merged via PR #72; broader autonomy remains unproven |
 | Reviewer / QA | Fresh cloud-model session with **read-only** tools/permissions, separate from implementation | Review actual diff, exact issue and parent constraints; confirm errors independently where possible; no automatic approval |
-| Lead / Producer | Cloud assistant; project-specific role instructions as appropriate | Prepare bounded tasks and trace requirements; may not approve scope |
+| Lead / Producer | Cloud assistant with project-local `producer-lead` instructions | Triage approved issues, maintain dependencies, and prepare/track handoffs. **Automatic Build/Reviewer dispatch is not implemented yet**; see [orchestration design](agent-orchestration.md) |
 | Architect | Cloud assistant; project-specific role instructions as appropriate | Evaluate tradeoffs and ADRs; cannot select production architecture without Creative Director approval |
 | Automated verification | Local Godot CLI, tests and CI | No LLM required; cannot substitute headless checks for rendered visual acceptance |
 | Creative Director | Human | Approves scope, accepts visual work, makes architecture decisions and merges PRs |
@@ -24,6 +24,7 @@ A reviewer can share the **same underlying model** as the developer if it uses a
 ## Evidence and rationale
 - Earlier local-model utility work showed some success, but the subsequent Issue #13 minimal Godot GUI assignment repeatedly failed despite direct tool access, execution errors and substantial human intervention. The reviewer also raised incorrect scope requirements and missed observable defects.
 - On **2026-11-23**, a **ChatGPT-connected cloud coding model in OpenCode Build** reportedly completed a separate minimal Godot capability test in **about two minutes**, with a successful independent launch and visible markers, and no implementation debugging required from the Creative Director.
+- The same workflow subsequently delivered the corrective Issue #13 2D isometric prototype in [PR #72](https://github.com/williamwhorton/The-Producer/pull/72), with exact-fixture tests and rendered GUI evidence. An independent Reviewer found no confirmed defects, the Creative Director launched the scene on the native Bazzite desktop, and the PR was merged. This improves confidence in bounded feature delivery but does not yet validate unattended multi-agent coordination.
 - **Both model and agent role changed**, and the tasks were not benchmark-controlled. The result establishes a practical working baseline, not proof that either component alone caused the improvement or that larger autonomous features will succeed.
 - Preserve the historical experiments and their limitations in ADR-0001. Prefer observed task completion and human intervention per accepted deliverable over parameter-count comparisons or theoretical throughput.
 
@@ -31,9 +32,19 @@ A reviewer can share the **same underlying model** as the developer if it uses a
 - **Preferred initial funding:** existing ChatGPT subscription through supported OpenCode sign-in, subject to subscription and usage limits. Sign-in does not imply unlimited access or unrestricted API billing.
 - **No paid API credits, automatic top-ups, new subscriptions, or paid provider fallback without explicit Creative Director approval.** Check the selected provider before running long tasks; report when plan limits or billing could force a change.
 - Use the built-in **Build** agent for the known working implementation path; do not transfer experimental local-model `execute`/tool-routing restrictions into Build without evidence of need.
-- At session start verify `git rev-parse --show-toplevel`, `git status --short --branch`, exact issue contents, and actual access to the intended Godot binary and required tools. Distinguish an OpenCode/Flatpak tool-access problem from a code defect.
+- At session start verify `git rev-parse --show-toplevel`, `git status --short --branch`, exact issue contents, and actual access to the intended Godot binary and required tools. For a future CLI runner, also verify `command -v opencode`, `opencode --version`, `opencode run --help`, effective agents/configuration, and GitHub CLI authentication **on the Creative Director's machine**. These are preflight checks, not verified remotely. Distinguish local command, authentication, configuration and code failures.
 - For visual work, demand executable project configuration, real GUI launch, and **observed** content. A scene node in source code is not evidence that its sprite/shape actually renders. Use screenshot inspection when tooling permits; otherwise mark visual behavior unverified and leave it for explicit human inspection.
 - Limit repeated identical failures; after two unsuccessful attempts at the same underlying blocker, stop and report what failed and what is needed. Do not manufacture test results or repeatedly modify prompt templates to avoid a failed task.
+
+## Lead coordination and planned orchestration
+
+The Lead is a technical producer rather than a second Developer: it maintains a complete backlog, verifies approvals and dependencies, chooses **only approved/Ready work**, prepares the original issue and evidence for handoff, coordinates independent QA and corrections, and reports outcomes to the Creative Director. It may not invent mechanics, approve architecture, or merge. The Architect advises; the Developer implements; the Reviewer independently verifies; the Creative Director accepts and merges.
+
+**Current state:** OpenCode CLI works interactively for development, but the repository does **not** yet contain a runner that automatically launches a separate Build primary-agent session and a separate Reviewer. Do not claim autonomous delegation because an instruction says to do so. For now, manual CLI sessions remain valid and the short issue/PR prompts in the workflow remain sufficient.
+
+**Next implementation candidate:** a small, local, explicitly invoked CLI runner that uses `opencode run --agent build` for development and `opencode run --agent producer-reviewer` for fresh independent review, in separate isolated worktrees. Before implementing it, verify the installed CLI and model resolution. The runner must gate developer completion on real artifacts/tests, then independently review, allow at most one bounded correction cycle by default, and stop for the Creative Director's acceptance. Preserve read-only reviewer permissions and the Build agent's successful tool setup. **No automatic merging, paid-provider fallback, unsanctioned backlog selection, or unattended permission approval.**
+
+See [Lead orchestration options and pilot contract](agent-orchestration.md) for supported alternatives, permissions, failure handling, cost boundaries, and a recommended sequence.
 
 ## Issue intake and triage
 Follow [GitHub issue types, fields and priority conventions](project-board-setup.md).

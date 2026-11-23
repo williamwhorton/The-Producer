@@ -27,5 +27,7 @@ The [MVP-to-release delivery plan](docs/mvp-delivery-plan.md) maps GitHub issues
 - [Open decisions](docs/open-questions.md)
 - [ADR template](docs/decisions/ADR-template.md)
 
-## Local development
-OpenCode + LM Studio on Bazzite. **gpt-oss-20b** is the provisional preferred model for Developer, Reviewer, Architect, and Lead, each in a separate task-scoped session. Qwen3-Coder is optional for second opinions; model selection is manual and separate from the agent profile. The engine and language have **not** been selected. See [agent workflow](docs/agent-workflow.md) and [agent model decision (ADR-0001)](docs/decisions/ADR-0001-local-agent-model-selection.md).
+## Development with AI agents
+The project uses **terminal-based OpenCode CLI on Bazzite** and a ChatGPT-connected **cloud coding model**. OpenCode's standard **Build** agent is the validated implementation path; independent read-only review, executable validation, and human acceptance remain required. Local LM Studio models are historical experiments, not the default. The production engine and language have **not** been selected.
+
+See the [agent workflow](docs/agent-workflow.md), [cloud-first decision (ADR-0003)](docs/decisions/ADR-0003-cloud-first-agent-development.md), and [Lead orchestration options](docs/agent-orchestration.md). The Lead orchestration runner is **proposed, not yet implemented**; do not assume assigning the Lead a task will automatically launch independent workers.
