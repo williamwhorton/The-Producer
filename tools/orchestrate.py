@@ -345,6 +345,9 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
                 value = state.get(name)
                 if isinstance(value, str):
                     known.add(Path(value).resolve())
+            for prior in state.get("review_worktrees", []):
+                if isinstance(prior, dict) and isinstance(prior.get("path"), str):
+                    known.add(Path(prior["path"]).resolve())
     removed, skipped = 0, []
     for record in registered_worktrees(repo):
         path = record["path"]
@@ -374,6 +377,12 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
             if is_review and "detached" in record:
                 pass
             elif branch and pr_preserves_head(repo, branch, head, is_legacy):
+                pass
+            elif (branch and is_agent and not is_legacy and
+                  subprocess.run(["git", "-C", str(path), "merge-base",
+                                  "--is-ancestor", "HEAD", "origin/main"],
+                                 capture_output=True, check=False).returncode == 0):
+                # Failed before the Developer created any unique commits.
                 pass
             else:
                 raise Blocked("local commit is not verified on an eligible GitHub PR")
@@ -437,8 +446,12 @@ def orchestrate(args: argparse.Namespace) -> int:
             review = repo.parent / f"{repo.name}-review-{run_id}-{attempt}"
             run_cmd(["git", "worktree", "add", "--detach", str(review), actual_sha],
                     repo, timeout=120)
+            state = json.loads(state_file.read_text())
+            history = state.get("review_worktrees", [])
+            history.append({"path": str(review), "sha": actual_sha})
             write_state(state_file, phase="reviewing", review_worktree=str(review),
-                        review_attempt=attempt)
+                        review_worktrees=history, review_attempt=attempt,
+                        head_sha=actual_sha)
             review_text = run_agent(["opencode", "run", "--standalone", "--agent",
                                      "producer-reviewer", "--model", model,
                                      review_prompt(issue, pr)], review,
@@ -468,6 +481,7 @@ def orchestrate(args: argparse.Namespace) -> int:
             if updated["number"] != pr["number"] or updated["headRefOid"] == pr["headRefOid"]:
                 raise Blocked("Correction did not update the same PR with a new commit.")
             pr = updated
+            write_state(state_file, head_sha=pr["headRefOid"])
         raise Blocked("No decisive review outcome.")
     except Blocked as exc:
         write_state(state_file, phase="blocked", reason=str(exc))
