@@ -1,6 +1,6 @@
 # ADR-0001 — Local AI-agent model selection
 
-**Status:** Approved provisionally (Creative Director)
+**Status:** Superseded on 2026-11-23 by [ADR-0003 — Cloud-first AI-agent development](ADR-0003-cloud-first-agent-development.md) (historical record retained)
 **Date:** 2026-11-22
 **Owner:** Creative Director
 **Related issue:** [#2](https://github.com/williamwhorton/The-Producer/issues/2)
