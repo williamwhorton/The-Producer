@@ -1,0 +1,35 @@
+name: PR Human Testing instructions
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  human-testing:
+    name: Human Testing instructions present
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check actionable acceptance instructions in PR body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request?.body || "";
+            const heading = /^#{1,4}\s+Human Testing(?: Instructions)?\s*$/im;
+            const found = heading.exec(body);
+            if (!found) {
+              core.setFailed("Add a ## Human Testing section to the PR body.");
+              return;
+            }
+            const content = body.slice(found.index + found[0].length)
+              .split(/^#{1,4}\s+/m)[0].trim();
+            const hasStep = /^\s*(?:[-*]|\d+[.)])\s+\S/m.test(content);
+            const hasExpected = /\b(?:expected|should|verify|confirm)\b/i.test(content);
+            const placeholders = /<[^>]+>|REPLACE WITH|\b(?:TODO|TBD)\b/i.test(content);
+            if (content.length < 45 || !hasStep || !hasExpected || placeholders) {
+              core.setFailed("Human Testing must include non-placeholder steps and expected results; "
+                + "include exact launch commands when applicable.");
+            }

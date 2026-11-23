@@ -1,0 +1,61 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // OpenCode V2 permissions. Unlisted commands require explicit approval.
+  // Do not use --auto in the supervised runner.
+  "permissions": [
+    { "action": "external_directory", "resource": "*", "effect": "ask" },
+    { "action": "read", "resource": "*.env", "effect": "deny" },
+    { "action": "read", "resource": "*.env.*", "effect": "deny" },
+    { "action": "read", "resource": "*.env.example", "effect": "allow" },
+
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "pwd", "effect": "allow" },
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git show *", "effect": "allow" },
+    { "action": "shell", "resource": "git rev-parse *", "effect": "allow" },
+    { "action": "shell", "resource": "git ls-files *", "effect": "allow" },
+    { "action": "shell", "resource": "git worktree list *", "effect": "allow" },
+    { "action": "shell", "resource": "git remote get-url origin", "effect": "allow" },
+    { "action": "shell", "resource": "git branch --show-current", "effect": "allow" },
+    { "action": "shell", "resource": "gh auth status *", "effect": "allow" },
+    { "action": "shell", "resource": "gh repo view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh issue view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh issue list *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr list *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr diff *", "effect": "allow" },
+    { "action": "shell", "resource": "godot --headless *", "effect": "allow" },
+    { "action": "shell", "resource": "godot --path *", "effect": "allow" },
+    { "action": "shell", "resource": "python3 -m unittest *", "effect": "allow" },
+    { "action": "shell", "resource": "python3 -m py_compile *", "effect": "allow" }
+  ],
+  "agents": {
+    "build": {
+      "permissions": [
+        // Normal changes on the supervised runner's dedicated agent/* branch.
+        { "action": "shell", "resource": "git add *", "effect": "allow" },
+        { "action": "shell", "resource": "git commit *", "effect": "allow" },
+        { "action": "shell", "resource": "git fetch origin *", "effect": "allow" },
+        { "action": "shell", "resource": "git push -u origin agent/*", "effect": "allow" },
+        { "action": "shell", "resource": "git push origin agent/*", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr create *", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr edit *", "effect": "allow" },
+        { "action": "shell", "resource": "gh issue comment *", "effect": "allow" },
+
+        // Ordering matters: explicit prohibitions after ordinary allowances.
+        { "action": "shell", "resource": "git push --force*", "effect": "deny" },
+        { "action": "shell", "resource": "git push origin main*", "effect": "deny" },
+        { "action": "shell", "resource": "git push -u origin main*", "effect": "deny" },
+        { "action": "shell", "resource": "git reset --hard *", "effect": "deny" },
+        { "action": "shell", "resource": "git clean *", "effect": "deny" },
+        { "action": "shell", "resource": "gh pr merge *", "effect": "deny" },
+        { "action": "shell", "resource": "gh issue close *", "effect": "deny" },
+        { "action": "shell", "resource": "sudo *", "effect": "deny" },
+        { "action": "shell", "resource": "rm -rf *", "effect": "deny" }
+      ]
+    }
+  }
+}

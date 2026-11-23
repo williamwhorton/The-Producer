@@ -9,6 +9,42 @@ The Creative Director should be able to ask: `Take approved Issue #N through dev
 
 Authoritative issue body/parent fixtures, PR diffs, tests, screenshots, status comments and ADRs are the durable exchange format. A Developer's self-reported success is not the independent QA verdict. The reviewer must retrieve the issue and inspect the actual head commit/diff, and report `Approve`, `Request changes` or `Unable to verify` as a technical recommendation.
 
+## Routine permissions (broker intentionally deferred)
+
+The project-level `opencode.jsonc` uses ordered OpenCode V2 rules to preapprove routine inspect/test commands, plus normal Build agent commit, `agent/*` feature-branch push and PR creation. Exceptional commands still require approval, and dangerous operations such as force pushes, destructive resets and PR merges are explicitly denied for Build. The Reviewer profile has its own read-only shell allowances/denials. Do not use `--auto`, install an API permission broker, or broaden to unconditional shell execution.
+
+After pulling the config, inspect the **effective** permissions locally using `opencode debug agent build` and `opencode debug agent producer-reviewer`. Local/global policy, saved approvals and MCP-specific permission requests may influence the actual result. Noninteractive OpenCode runs still cannot solicit permission decisions through the runner. This is intentionally a scoped reduction in prompt frequency, **not** a full solution to every permission request.
+
+## Safe worktree cleanup and local Godot testing
+
+When the runner and OpenCode are no longer actively writing, review local worktrees and running processes **before removing any worktree**. A merged PR is not proof that local uncommitted data can be discarded.
+
+```sh
+cd ~/Projects/The-Producer
+git worktree list --porcelain
+pgrep -af 'opencode|orchestrate.py' || true
+```
+
+For each candidate worktree, check `git -C /absolute/path/to/worktree status --short --branch` and confirm its associated PR is **merged or closed**, with no uncommitted/untracked files or running agent. Then remove that **specific** path from the main checkout:
+
+```sh
+git worktree remove /absolute/path/to/finished-worktree
+git worktree list
+```
+
+Never use `git worktree remove --force`, `git clean`, `git reset --hard`, or a blanket folder deletion to make cleanup succeed. A worktree with changes or active agents is a stop-and-investigate case. This removes an extra checkout, **not** the merged main-branch files or the worktree's branch. Keep `../.The-Producer-agent-runs/issue-N/` logs and state for review; deleting logs is not a safe way to unblock a duplicate runner invocation.
+
+After merged work is pulled into main, the stable way to run the 2D and 3D prototypes from the primary checkout is:
+
+```sh
+git switch main
+git pull --ff-only
+godot --path "$PWD/spikes/issue-4-2d"
+godot --path "$PWD/spikes/issue-4-3d"
+```
+
+The main checkout contains merged snapshots; you need **not** switch to an issue branch or launch from the parent directory.
+
 ## Supervised runner: commands and guardrails
 
 The initial runner is standard-library Python 3 (no pip dependencies). From the main checkout **after this PR merges**:
@@ -33,7 +69,7 @@ The dry-run checks local commands, GitHub repo/auth, issue contents, existing op
 python3 tools/orchestrate.py 14 --model 'openai/YOUR-VERIFIED-MODEL#high' --approve-issue
 ```
 
-For a real run, the script (1) requires the explicit `--approve-issue` authorization, (2) creates its own branch and sibling worktree from freshly fetched `origin/main`, (3) runs `opencode run --standalone --agent build --model ...`, (4) requires an open non-draft PR on the expected branch with `Closes #N`, a nonempty diff and a section headed Evidence/Verification/Tests, (5) creates a **separate detached worktree at the exact PR SHA** and runs a fresh `producer-reviewer` primary agent, and (6) allows one corrective Build pass followed by fresh review. It validates the PR head hasn't changed during review and only returns "ready for acceptance" for a single explicit `REVIEW_VERDICT: APPROVE`. The Reviewer verdict remains a technical recommendation; the human still visually accepts and merges.
+For a real run, the script (1) requires the explicit `--approve-issue` authorization, (2) creates its own branch and sibling worktree from freshly fetched `origin/main`, (3) runs `opencode run --standalone --agent build --model ...`, (4) requires an open non-draft PR on the expected branch with `Closes #N`, a nonempty diff, an Evidence/Verification/Tests section and **Human Testing** steps for final acceptance, (5) creates a **separate detached worktree at the exact PR SHA** and runs a fresh `producer-reviewer` primary agent, and (6) allows one corrective Build pass followed by fresh review. It validates the PR head hasn't changed during review and only returns "ready for acceptance" for a single explicit `REVIEW_VERDICT: APPROVE`. The Reviewer verdict remains a technical recommendation; the human still visually accepts and merges.
 
 **Local state and cleanup:** State and text transcripts live under `../.The-Producer-agent-runs/issue-N/`, outside the Git checkout. Developer and Reviewer worktrees are sibling paths recorded in `state.json`. The first version intentionally **does not resume after interruption** or delete worktrees. If blocked, inspect `state.json`, the logs, `git worktree list`, the branch and any PR before deciding how to recover. Do not delete these records to force an unsafe duplicate run. After a successful human merge, clean up worktrees manually only after checking for uncommitted work.
 
