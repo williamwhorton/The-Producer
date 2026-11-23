@@ -17,7 +17,9 @@ def sample_pr(sha='a' * 40):
         'number': 90, 'url': 'https://github.com/williamwhorton/The-Producer/pull/90',
         'state': 'OPEN', 'isDraft': False, 'baseRefName': 'main',
         'headRefName': 'agent/issue-14-test', 'headRefOid': sha,
-        'body': '## Evidence\nAutomated tests and GUI walkthrough\n\nCloses #14',
+        'body': ('## Evidence\nAutomated tests and GUI walkthrough\n\nCloses #14\n\n'
+                 '## Human Testing\n1. Run `godot --path spikes/issue-4-3d`. '
+                 'Expected: the 3D house launches and markers are visible.\n'),
         'files': [{'path': 'spikes/issue-4-3d/main.tscn'}],
     }
 
@@ -42,13 +44,28 @@ class ParserTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(mod.Blocked):
                 mod.review_verdict(value)
 
+    def test_human_testing_required_and_actionable(self):
+        valid = ('## Human Testing\n1. Run `godot --path spikes/issue-4-3d`. '
+                 'Expected: the house launches with all three markers visible.\n')
+        mod.validate_human_testing(valid)
+        for body in (
+            '## Evidence\nGodot passed.',
+            '## Human Testing\nTODO add steps later',
+            '## Human Testing\n1. Run <exact command>. Expected: <specific result>.',
+            '## Human Testing\n1. Check the thing.',
+            '## Human Testing\nThe reviewer said it works and no manual check is needed.',
+        ):
+            with self.subTest(body=body), self.assertRaises(mod.Blocked):
+                mod.validate_human_testing(body)
+
     def test_pr_requires_correct_commit_scope_and_evidence(self):
         p = sample_pr()
         with patch.object(mod, 'json_cmd', side_effect=[[{'number': 90}], p]):
             self.assertEqual(mod.pr_details(p['headRefName'], 14, Path('/tmp'))['number'], 90)
         for replacement in ({'body': 'Refs #14\n## Evidence'}, {'isDraft': True},
                             {'files': []}, {'headRefOid': 'bad'},
-                            {'baseRefName': 'other'}, {'body': 'Closes #14'}):
+                            {'baseRefName': 'other'}, {'body': 'Closes #14'},
+                            {'body': '## Evidence\nTested.\nCloses #14'}):
             broken = {**p, **replacement}
             with self.subTest(replacement=replacement), patch.object(mod, 'json_cmd', side_effect=[[{'number': 90}], broken]):
                 with self.assertRaises(mod.Blocked):
