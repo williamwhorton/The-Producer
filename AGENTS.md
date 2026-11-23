@@ -36,7 +36,7 @@
 5. Add tests and run the relevant checks; report actual commands and outcomes. For GUI work, confirm a launchable main scene and observed visible behavior (or mark it unverified); headless import alone does not establish visual correctness. Never claim unexecuted tests passed.
 6. Request independent review; resolve findings or document blockers.
 7. Update documentation when an approved contract changes; create ADR for significant architecture decisions.
-8. Submit a PR with issue reference, summary, evidence, limitations and risks. Do not merge without configured review gates.
+8. Submit a PR with issue reference, summary, evidence, limitations, risks, and a **Human Testing** section containing concrete acceptance steps, expected outcomes, and exact commands where applicable. Do not merge without configured review gates.
 
 ## MVP backlog completeness and parallel decision work
 - The Project Backlog must describe a credible path from current concept through a shippable, supported MVP, not just a list of upcoming coding tasks. See `docs/mvp-delivery-plan.md` for workstreams, milestones, dependencies, requirements coverage, release gates and identified issues.
@@ -76,6 +76,9 @@
 - Horror is primary; comic relief arises organically rather than through constant parody.
 - Do not substitute arbitrary random outcomes for explainable behavior.
 - No mandatory cloud inference or paid model API in the shipped game unless separately approved.
+
+## Pull request human acceptance contract
+Every PR—game code, tools, automation, documentation, or design—must contain a **Human Testing** section directly in its body. Give the Creative Director reproducible steps and expected outcomes. For executable work, include the actual commands to launch or exercise it and any setup requirements; for non-executable changes, describe the exact content or behavior to inspect. Do not rely exclusively on links to a README, vague requests to "test it", or placeholder text. The Developer writes these steps, the Reviewer verifies their accuracy and sufficiency, and the Lead must not hand off a PR for acceptance if the section is missing. Human acceptance and merge remain Creative Director decisions.
 
 ## Coding and review standards
 - Prefer the simplest implementation that fully satisfies the approved requirements and acceptance criteria. Favor clarity and maintainability over cleverness or minimal line count.
