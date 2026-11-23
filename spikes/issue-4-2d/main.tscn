@@ -1,0 +1,251 @@
+[gd_scene
+format_version = "5"
+metadata = { "editor_icon": "res://", "custom_node_preset": "" }
+uid = "rid:1234567890abcdef"
+
+[ext_resource type="Script" path="res://spikes/issue-4-2d/main.gd" id="2_main_script"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("2_main_script")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+layer = 1
+zoom = Vector2(32.0, 32.0)
+grow_bounds_on_zoom = false
+auto_scale_enabled = true
+
+[node name="GroundFloor" type="Control" parent="."]
+anchor_bottom = 0.0
+offset_bottom = 0.0
+anchor_left = 0.0
+offset_left = 0.0
+anchor_right = 1.0
+offset_right = 0.0
+anchor_top = 0.0
+offset_top = 0.0
+anchors_preset = 1
+custom_minimum_size = Vector2(0, 0)
+visible = true
+
+[node name="GroundFloorBackground" type="ColorRect" parent="GroundFloor"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.95, 0.85, 0.7, 1.0)
+offset_left = -320.0
+offset_top = -320.0
+size = Vector2(640, 640)
+
+[node name="RoomA" type="Control" parent="GroundFloor"]
+layout_mode = 3
+grow_color_on_resizing = false
+custom_minimum_size = Vector2(0, 0)
+visible = true
+
+[node name="RoomABackground" type="ColorRect" parent="RoomA"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.92, 0.8, 0.65, 1.0)
+offset_left = -96.0
+offset_top = -96.0
+size = Vector2(192, 192)
+
+[node name="WallNA" type="ColorRect" parent="RoomA"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -96.0
+offset_top = -96.0
+size = Vector2(192, 48)
+
+[node name="WallSA" type="ColorRect" parent="RoomA"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -96.0
+offset_top = -144.0
+size = Vector2(192, 48)
+
+[node name="WallWA" type="ColorRect" parent="RoomA"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -96.0
+offset_top = -96.0
+size = Vector2(48, 192)
+
+[node name="DoorAB" type="ColorRect" parent="RoomA"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.65, 0.5, 0.4, 1.0)
+offset_left = -48.0
+offset_top = -96.0
+size = Vector2(48, 96)
+
+[node name="RoomB" type="Control" parent="GroundFloor"]
+layout_mode = 3
+grow_color_on_resizing = false
+custom_minimum_size = Vector2(0, 0)
+visible = true
+
+[node name="RoomBBackground" type="ColorRect" parent="RoomB"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.9, 0.78, 0.62, 1.0)
+offset_left = -160.0
+offset_top = -96.0
+size = Vector2(320, 192)
+
+[node name="WallNB" type="ColorRect" parent="RoomB"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -160.0
+offset_top = -96.0
+size = Vector2(320, 48)
+
+[node name="WallSB" type="ColorRect" parent="RoomB"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -160.0
+offset_top = -192.0
+size = Vector2(320, 48)
+
+[node name="WallWB" type="ColorRect" parent="RoomB"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -160.0
+offset_top = -96.0
+size = Vector2(48, 192)
+
+[node name="RoomC" type="Control" parent="GroundFloor"]
+layout_mode = 3
+grow_color_on_resizing = false
+custom_minimum_size = Vector2(0, 0)
+visible = true
+
+[node name="RoomCBackground" type="ColorRect" parent="RoomC"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.88, 0.76, 0.6, 1.0)
+offset_left = -128.0
+offset_top = -256.0
+size = Vector2(256, 256)
+
+[node name="WallNC" type="ColorRect" parent="RoomC"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -128.0
+offset_top = -256.0
+size = Vector2(256, 48)
+
+[node name="WallSC" type="ColorRect" parent="RoomC"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -128.0
+offset_top = -304.0
+size = Vector2(256, 48)
+
+[node name="WallWC" type="ColorRect" parent="RoomC"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -128.0
+offset_top = -256.0
+size = Vector2(48, 256)
+
+[node name="DoorAC" type="ColorRect" parent="RoomC"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.7, 0.55, 0.45, 1.0)
+offset_left = -96.0
+offset_top = -224.0
+size = Vector2(64, 64)
+
+[node name="UpperFloor" type="Control" parent="." layer = "1"]
+anchor_bottom = 0.0
+offset_bottom = 0.0
+anchor_left = 0.0
+offset_left = 0.0
+anchor_right = 1.0
+offset_right = 0.0
+anchor_top = 0.0
+offset_top = 0.0
+anchors_preset = 1
+custom_minimum_size = Vector2(0, 0)
+visible = true
+
+[node name="UpperFloorBackground" type="ColorRect" parent="UpperFloor"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.96, 0.9, 0.8, 1.0)
+offset_left = -480.0
+offset_top = -480.0
+size = Vector2(960, 960)
+
+[node name="UpperRoom" type="Control" parent="UpperFloor"]
+layout_mode = 3
+grow_color_on_resizing = false
+custom_minimum_size = Vector2(0, 0)
+visible = true
+
+[node name="UpperRoomBackground" type="ColorRect" parent="UpperRoom"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.94, 0.86, 0.74, 1.0)
+offset_left = -96.0
+offset_top = -96.0
+size = Vector2(192, 192)
+
+[node name="WallNUR" type="ColorRect" parent="UpperRoom"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -96.0
+offset_top = -96.0
+size = Vector2(192, 48)
+
+[node name="WallSUR" type="ColorRect" parent="UpperRoom"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -96.0
+offset_top = -144.0
+size = Vector2(192, 48)
+
+[node name="WallWUR" type="ColorRect" parent="UpperRoom"]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(0.4, 0.35, 0.3, 1.0)
+offset_left = -96.0
+offset_top = -96.0
+size = Vector2(48, 192)
+
+[node name="MarkerA" type="CharacterBody2D" parent="."]
+layer = 2
+collision_layer = 2
+collision_mask = 3
+script = "res://spikes/issue-4-2d/scripts/MaroonContestant.gd"
+visible = true
+
+[node name="MarkerB" type="CharacterBody2D" parent="." layer = "2"]
+collision_layer = 2
+collision_mask = 3
+visible = true
+
+[node name="SupernaturalMarker" type="CharacterBody2D" parent="." layer = "3"]
+collision_layer = 4
+collision_mask = 0
+script = "res://spikes/issue-4-2d/scripts/Spirit.gd"
+visible = true
+
+[node name="SelectionRect" type="ColorRect" parent="."]
+layout_mode = 3
+grow_color_on_resizing = false
+color = Color(1.0, 0.2, 0.2, 0.5)
+offset_left = -64.0
+offset_top = -64.0
+size = Vector2(128, 128)
