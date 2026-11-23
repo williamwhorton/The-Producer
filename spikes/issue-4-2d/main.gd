@@ -13,8 +13,8 @@ var marker_positions : Array[Vector2] = []
 func _ready():
 	set_process_input(true)
 	# Initialize marker positions for demo (two connected cells in Room A and B)
-	marker_positions.append(Vector2(1 * TILE_SIZE, TILE_SIZE))   # Cell in Room A
-	marker_positions.append(Vector2(4 * TILE_SIZE, TILE_SIZE))   # Cell in Room B
+	marker_positions.append(Vector2(1 * TILE_SIZE, TILE_SIZE))   # Cell in Room A - hardcoded demo position
+	marker_positions.append(Vector2(4 * TILE_SIZE, TILE_SIZE))   # Cell in Room B - hardcoded demo position
 	
 	# Connect to markers to set their targets
 	if has_node("MarkerA"):
@@ -27,11 +27,7 @@ func _ready():
 		if contestant:
 			contestant.target_position = marker_positions[1] if marker_positions.size() > 1 else position
 	
-	# Connect to supernatural marker
-	if has_node("SupernaturalMarker"):
-		var spirit = SupernaturalMarker.get_node_or_null("SupernaturalMarker") as CharacterBody2D
-		if spirit:
-			spirit.target_position = position
+	# No supernatural marker in this prototype (Issue #13 scope)
 	
 	update()
 

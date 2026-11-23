@@ -1,6 +1,10 @@
 ; Engine configuration file.
-; It's best edited using the editor UI, but you can manually edit the file.
-; For the list of recognized arguments, use: godot --render-help
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -8,9 +12,10 @@ config_version=5
 
 config/name="Godot 4 2D Isometric Prototype"
 config/description="Isometric dollhouse comparison prototype for Issue #13. Demonstrates two-level house rendering with room geometry, floor visibility, markers and camera controls using Godot 4 primitives only."
+config/features=PackedStringArray("4.7")
 
-[rendering/graphics]
+[rendering]
 
-antialiasing/gi_enabled=false
-antialiasing/denoiser/shader_quality=0
-antialiasing/upscale_filter/sprite_texture/default/mipmaps_clamped=true
+graphics/antialiasing/gi_enabled=false
+graphics/antialiasing/denoiser/shader_quality=0
+graphics/antialiasing/upscale_filter/sprite_texture/default/mipmaps_clamped=true

@@ -35,17 +35,45 @@ This is a disposable proof-of-concept created for **Issue #13** (Build Godot 4 2
 - **Space bar** – cycle through rooms (highlighted by a red selection rectangle).
 - **Left/Right arrow keys** – move the first contestant marker left/right (debug demo only). No other player input is processed.
 
-## Layout notes
-The ground and upper floors are represented with simple colored rectangles (no TileMapLayer nodes in this minimal prototype for speed of iteration). Walls and doors are also colored rectangles:
-- Ground floor: three rooms (`RoomA`, `RoomB`, `RoomC`) with visible walls and doorway openings
-- Upper floor: one small room accessible from below
+## Figure 1: Ground Floor Layout (ASCII Diagram)
 
-The coordinates follow the same isometric convention as Issue #4's coordinate map, but this prototype uses a simple 2D Control layout instead of actual TileMap layers.
+```
+   Iso View (Top-Left Corner)
+   ┌─────────────────────────────┐
+   │      Upper Floor (hidden by default)      │
+   │     ╔═════════════════╗          R key toggles
+   │     ║                 ║        visibility
+   │     ║  UPER ROOM      ║
+   │     ║                 ║
+   │     ╚════════════════╣│
+   │                     ║ │┌─┐ ┌─┐ Doorway
+   │                   ────║ ├┤ ├─── Connected Cell
+   │                     ║ │└─┘    (Room A)
+   │                     ║ │       ┌─┐
+   │        ╔═══════════╣│╬│      │A│ Doorway
+   │        ║           ║│╬│──────┤B│ Connected Cell
+   │        ║  GROUND   ║│╬│       └─┘
+   │        ║     FLOOR ║│╬│   ┌─┐ Room C
+   │        ║           ║│╬│   └─┘
+   │        ╚═══════════╣│╬│       ┌─┐ Doorway
+   │                    ║ │      ───┤C│ Connected Cell
+   │                    ║ │
+   │                  Doorway
+   └─────────────────────┘
+```
+
+**Legend:**
+- `═══════════` = Wall (vertical line segments in isometric view)
+- `╬` = Doorway opening between connected cells
+- `┌─┐ └─┘` = Room boundaries
+- `A`, `B`, `C` = Room labels (highlighted by red selection rect via Space bar)
+
+The prototype uses Control nodes with ColorRects to represent walls, doors, and floor areas. Coordinates follow Godot's isometric convention as shown in the diagram above.
 
 ## Controls (in scene tree)
 - **R** – Toggle upper floor visibility
 - **Space** – Cycle selected room (A → B → C)
-- **Left/Right arrow** – Move marker A left/right (debug movement demo)
+- **Left/Right arrow** – Move PlayerMarker left/right (debug movement demo between Room A and B cells)
 
 ## Known limitations
 This is a disposable proof-of-concept; do not treat as production code:
@@ -59,17 +87,17 @@ This is a disposable proof-of-concept; do not treat as production code:
 ## File structure
 ```
 spikes/issue-4-2d/
-├── main.tscn          # Main scene with camera and floor layout
-├── main.gd            # Root node script with controls and demo logic
-├── project.godot      # Godot 4.7 project configuration
-├── README.md          # This file
+├── main.tscn              # Main scene with camera and floor layout (SupernaturalMarker removed)
+├── main.gd                # Root node script with controls and demo logic
+├── project.godot          # Godot 4.7 project configuration
+├── README.md              # This documentation file
 ├── scripts/
-│   ├── Contestant.gd  # Base contestant marker behavior
-│   ├── MaroonContestant.gd  # First contestant (Room A)
-│   └── Spirit.gd      # Supernatural entity (wandering AI)
+│   ├── Contestant.gd      # Base PlayerMarker behavior (renamed from ContestantMarker)
+│   ├── MaroonContestant.gd  # First contestant marker behavior (renamed from MaroonContestantMarker)
+│   └── Spirit.gd          # DELETED - supernatural entity not included in Issue #13 scope
 ├── scenes/
-│   └── Camera2D.tscn  # Camera scene template
-└── .godot/            # Godot import cache (auto-generated)
+│   └── Camera2D.tscn      # Camera scene template
+└── .godot/                # Godot import cache (auto-generated)
 ```
 
 ---

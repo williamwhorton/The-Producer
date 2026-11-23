@@ -3,7 +3,7 @@ format_version = "5"
 metadata = { "editor_icon": "res://", "custom_node_preset": "" }
 uid = "rid:1234567890abcdef"
 
-[ext_resource type="Script" path="res://spikes/issue-4-2d/main.gd" id="2_main_script"]
+[ext_resource type="Script" path="res://main.gd" id="2_main_script"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("2_main_script")
@@ -228,18 +228,12 @@ size = Vector2(48, 192)
 layer = 2
 collision_layer = 2
 collision_mask = 3
-script = "res://spikes/issue-4-2d/scripts/MaroonContestant.gd"
+script = "res://scripts/MaroonContestant.gd"
 visible = true
 
 [node name="MarkerB" type="CharacterBody2D" parent="." layer = "2"]
 collision_layer = 2
 collision_mask = 3
-visible = true
-
-[node name="SupernaturalMarker" type="CharacterBody2D" parent="." layer = "3"]
-collision_layer = 4
-collision_mask = 0
-script = "res://spikes/issue-4-2d/scripts/Spirit.gd"
 visible = true
 
 [node name="SelectionRect" type="ColorRect" parent="."]
@@ -249,3 +243,5 @@ color = Color(1.0, 0.2, 0.2, 0.5)
 offset_left = -64.0
 offset_top = -64.0
 size = Vector2(128, 128)
+
+]
