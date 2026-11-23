@@ -3,7 +3,7 @@ extends Node2D
 # Isometric renderer for Issue #13 - Godot 4.7 prototype
 # Coordinates are in Godot units; 1 unit = 64 pixels (isometric scale)
 const TILE_SIZE : int = 64
-const GRID_SIZE : int = 8
+const GRID_SIZE : int = 10
 
 var upper_visible := true
 var selected_room_index : int = 0
