@@ -254,3 +254,112 @@ def preflight(repo: Path, issue: int, model: str) -> dict:
     print(f"Requested cloud model: {model}. Ensure it uses ChatGPT plan authentication.")
     return data
 
+
+def orchestrate(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).expanduser().resolve()
+    if not repo.is_dir():
+        raise Blocked(f"Repository directory not found: {repo}")
+    model = require_model(args.model)
+    issue = args.issue
+    info = preflight(repo, issue, model)
+    run_home = repo.parent / f".{repo.name}-agent-runs"
+    state_dir = run_home / f"issue-{issue}"
+    if state_dir.exists():
+        raise Blocked(f"Existing run for Issue #{issue}: {state_dir}. "
+                      "Inspect its state/logs; manual recovery is required in v1.")
+    if args.dry_run:
+        print(f"DRY RUN: would create a separate worktree from origin/{BASE_BRANCH}, "
+              "launch OpenCode Build and Reviewer as fresh sessions, and leave PR unmerged.")
+        print("No branches, worktrees, agent sessions, or state files created.")
+        return 0
+    if not args.approve_issue:
+        raise Blocked("Execution requires --approve-issue, explicitly authorizing "
+                      "this open issue for the supervised pilot. Use --dry-run first.")
+    run_cmd(["git", "fetch", "origin", BASE_BRANCH], repo, timeout=120)
+    run_cmd(["git", "rev-parse", "--verify", f"origin/{BASE_BRANCH}"], repo)
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_id = f"{issue}-{stamp}-{secrets.token_hex(3)}"
+    branch = f"agent/issue-{issue}-{stamp.lower()}-{secrets.token_hex(2)}"
+    dev = repo.parent / f"{repo.name}-agent-{run_id}"
+    state_dir.mkdir(parents=True, exist_ok=False)
+    state_file = state_dir / "state.json"
+    write_state(state_file, phase="starting", issue=issue, title=info["title"],
+                model=model, branch=branch, development_worktree=str(dev),
+                created_at=stamp, approved_by_human=True)
+    print(f"Run log/state: {state_dir}")
+    try:
+        run_cmd(["git", "worktree", "add", "-b", branch, str(dev),
+                 f"origin/{BASE_BRANCH}"], repo, timeout=120)
+        write_state(state_file, phase="developing")
+        prompt = developer_prompt(issue, branch)
+        run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
+                   prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
+        pr = pr_details(branch, issue, repo)
+        write_state(state_file, phase="reviewing", pr=pr["url"], head_sha=pr["headRefOid"])
+        for attempt in range(2):
+            # Fetch remote head, then review the exact GitHub PR commit detached.
+            run_cmd(["git", "fetch", "origin", branch], repo, timeout=120)
+            actual_sha = run_cmd(["git", "rev-parse", "FETCH_HEAD"], repo)
+            if actual_sha != pr["headRefOid"]:
+                raise Blocked("PR commit changed while preparing review; stop to avoid a stale review.")
+            review = repo.parent / f"{repo.name}-review-{run_id}-{attempt}"
+            run_cmd(["git", "worktree", "add", "--detach", str(review), actual_sha],
+                    repo, timeout=120)
+            write_state(state_file, phase="reviewing", review_worktree=str(review),
+                        review_attempt=attempt)
+            review_text = run_agent(["opencode", "run", "--standalone", "--agent",
+                                     "producer-reviewer", "--model", model,
+                                     review_prompt(issue, pr)], review,
+                                    state_dir / f"review-{attempt}.log",
+                                    args.timeout_minutes * 60)
+            verdict = review_verdict(review_text)
+            latest = pr_details(branch, issue, repo)
+            if latest["headRefOid"] != pr["headRefOid"]:
+                raise Blocked("PR head changed during review; verdict is stale.")
+            write_state(state_file, last_verdict=verdict)
+            if verdict == "APPROVE":
+                write_state(state_file, phase="ready_for_human_acceptance")
+                print(f"READY FOR YOUR ACCEPTANCE: {pr['url']}")
+                print(f"Issue #{issue}, verified PR head {pr['headRefOid']}, "
+                      f"review verdict {verdict}; logs: {state_dir}")
+                print("Human visual acceptance and merge remain required.")
+                return 0
+            if verdict == "UNABLE_TO_VERIFY":
+                raise Blocked("Independent reviewer could not verify the PR; see logs.")
+            if attempt:
+                raise Blocked("Independent review still requests changes after one correction cycle.")
+            write_state(state_file, phase="correcting")
+            run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
+                       model, correction_prompt(issue, pr, review_text)], dev,
+                      state_dir / "developer-1.log", args.timeout_minutes * 60)
+            updated = pr_details(branch, issue, repo)
+            if updated["number"] != pr["number"] or updated["headRefOid"] == pr["headRefOid"]:
+                raise Blocked("Correction did not update the same PR with a new commit.")
+            pr = updated
+        raise Blocked("No decisive review outcome.")
+    except Blocked as exc:
+        write_state(state_file, phase="blocked", reason=str(exc))
+        raise
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("issue", type=int, help="approved GitHub issue number")
+    parser.add_argument("--repo", default=".", help="path to the main repository checkout")
+    parser.add_argument("--model", required=True, help="explicit OpenAI model ID from OpenCode")
+    parser.add_argument("--dry-run", action="store_true", help="preflight only; no writes or AI runs")
+    parser.add_argument("--approve-issue", action="store_true", help="authorize this issue's execution")
+    parser.add_argument("--timeout-minutes", type=int, default=60,
+                        help="timeout per model session (default: 60)")
+    args = parser.parse_args(argv)
+    if args.issue < 1 or not 1 <= args.timeout_minutes <= 180:
+        parser.error("issue must be positive and timeout-minutes must be between 1 and 180")
+    try:
+        return orchestrate(args)
+    except Blocked as exc:
+        print(f"BLOCKED: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
