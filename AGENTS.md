@@ -8,8 +8,8 @@
 - **Independent Reviewer/QA agent:** reviews changes against requirements, tests and privacy boundaries; does not approve its own implementation.
 - **Design/Narrative specialist (optional):** proposes mechanics, scenarios, characters and dialogue; proposals remain unapproved.
 
-## Local model selection and review independence
-- Use `docs/agent-workflow.md` and ADR-0001 for the current preferred local model and role handoffs. Model assignment is provisional and **not** embedded in each agent's permissions.
+## Model selection and review independence
+- Use `docs/agent-workflow.md` and [ADR-0003](docs/decisions/ADR-0003-cloud-first-agent-development.md) for the **cloud-first development workflow**. ADR-0003 supersedes ADR-0001's local-model defaults. The validated implementation baseline is **OpenCode Build with a ChatGPT-connected cloud model**; specialized profiles remain optional and have distinct tool permissions. Do not hard-code provider IDs or treat model selection as a gameplay-engine decision.
 - Developer and Reviewer may use the **same underlying model**, but must use separate, fresh sessions. The Reviewer inspects the actual code/diff and tests rather than inheriting the Developer's claims.
 - A model's review is an independent **session-level** technical recommendation, not a separate GitHub account's required approval or evidence of independent model-family reasoning.
 - Where warranted, obtain a cross-model second opinion, especially after unexplained failures or high-risk changes.
@@ -27,7 +27,7 @@
 2. Identify ambiguities and dependencies before editing. Escalate material design questions.
 3. Produce a concise implementation plan and identify test evidence.
 4. Work in an isolated branch/worktree; one active writer per worktree.
-5. Add tests and run the relevant checks; report actual commands and outcomes. Never claim unexecuted tests passed.
+5. Add tests and run the relevant checks; report actual commands and outcomes. For GUI work, confirm a launchable main scene and observed visible behavior (or mark it unverified); headless import alone does not establish visual correctness. Never claim unexecuted tests passed.
 6. Request independent review; resolve findings or document blockers.
 7. Update documentation when an approved contract changes; create ADR for significant architecture decisions.
 8. Submit a PR with issue reference, summary, evidence, limitations and risks. Do not merge without configured review gates.
@@ -85,7 +85,7 @@
 Treat chat context as disposable. Persistent truth belongs in versioned files, issues, ADRs and tests. On handoff record: task status, commit/PR, decisions, commands/results, outstanding issues and next steps. Start fresh task-scoped sessions rather than relying on indefinite compaction.
 
 ## Safety / operational permissions
-Use bounded retries, timeouts and explicit approval for destructive commands, dependency additions, branch protection changes, release publication and data deletion. Keep model/API credentials out of the repository. Do not expose debug-only internal contestant state to player builds.
+Use bounded retries, timeouts and explicit approval for destructive commands, dependency additions, branch protection changes, release publication and data deletion. Cloud development within the existing ChatGPT subscription allowance is approved; additional paid API usage, top-ups or subscriptions require explicit Creative Director approval. Keep model/API credentials out of the repository. Do not expose debug-only internal contestant state to player builds.
 
 ## Definition of done
 Acceptance criteria met; relevant automated checks pass; independent review completed; no unresolved critical issues; documentation updated; reproducible build where applicable; no unrelated changes.
