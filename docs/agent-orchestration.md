@@ -1,13 +1,43 @@
 # Lead-agent orchestration: implementation options and pilot contract
 
-**Status:** Proposal / implementation not started. This document records choices and guardrails; it does **not** authorize autonomous backlog execution, change OpenCode permissions, or certify any runner as working.
-**Environment:** The Creative Director uses the **native terminal-based OpenCode CLI** on Bazzite Linux, with ChatGPT-connected cloud models. OpenCode Build is the validated implementation agent. The installed local OpenCode version and CLI authentication have **not** been inspected by this documentation change.
+**Status:** Option A implemented as a **supervised pilot** (`tools/orchestrate.py`); Python unit tests pass, but **no authenticated live OpenCode/GitHub run has been performed by this change**. Other options remain proposals. This does **not** authorize autonomous backlog execution, change permissions, or certify the entire workflow as production-ready.
+**Environment:** The Creative Director uses **OpenCode CLI 2.4.1** on Bazzite Linux, with ChatGPT-connected cloud models. Build is the validated interactive implementation agent; the Python subprocess runner's live tool permissions, provider authentication, and model resolution have **not** yet been inspected on that machine.
 
 ## Objective and authority
 
 The Creative Director should be able to ask: `Take approved Issue #N through development and independent review.` The Lead verifies prerequisites and coordinates a **separate Build developer**, a **fresh independent Reviewer**, and any bounded corrections. It hands off a verified PR and remaining acceptance questions to the Creative Director. It may prepare/reconcile existing issues and propose missing work, but **cannot self-approve game design, start unapproved work, change production architecture, merge PRs or introduce paid API charges**.
 
 Authoritative issue body/parent fixtures, PR diffs, tests, screenshots, status comments and ADRs are the durable exchange format. A Developer's self-reported success is not the independent QA verdict. The reviewer must retrieve the issue and inspect the actual head commit/diff, and report `Approve`, `Request changes` or `Unable to verify` as a technical recommendation.
+
+## Supervised runner: commands and guardrails
+
+The initial runner is standard-library Python 3 (no pip dependencies). From the main checkout **after this PR merges**:
+
+```sh
+cd ~/Projects/The-Producer
+git switch main
+git pull --ff-only
+python3 -m unittest discover -s tests -p 'test_orchestrate.py' -v
+opencode models
+```
+
+Choose the **exact OpenAI model ID** from the working OpenCode sign-in. A previously selected interactive model does not necessarily become the default of a new CLI session; use an explicit ID and variant. The following **placeholder must be replaced**, not pasted literally:
+
+```sh
+python3 tools/orchestrate.py 14 --model 'openai/YOUR-VERIFIED-MODEL#high' --dry-run
+```
+
+The dry-run checks local commands, GitHub repo/auth, issue contents, existing open PRs, reviewer profile, and OpenCode CLI availability; **it does not call a model, fetch branches, write a worktree, or launch Build**. Once you have explicitly approved the issue's requirements and checked its dependencies and Ready status:
+
+```sh
+python3 tools/orchestrate.py 14 --model 'openai/YOUR-VERIFIED-MODEL#high' --approve-issue
+```
+
+For a real run, the script (1) requires the explicit `--approve-issue` authorization, (2) creates its own branch and sibling worktree from freshly fetched `origin/main`, (3) runs `opencode run --standalone --agent build --model ...`, (4) requires an open non-draft PR on the expected branch with `Closes #N`, a nonempty diff and a section headed Evidence/Verification/Tests, (5) creates a **separate detached worktree at the exact PR SHA** and runs a fresh `producer-reviewer` primary agent, and (6) allows one corrective Build pass followed by fresh review. It validates the PR head hasn't changed during review and only returns "ready for acceptance" for a single explicit `REVIEW_VERDICT: APPROVE`. The Reviewer verdict remains a technical recommendation; the human still visually accepts and merges.
+
+**Local state and cleanup:** State and text transcripts live under `../.The-Producer-agent-runs/issue-N/`, outside the Git checkout. Developer and Reviewer worktrees are sibling paths recorded in `state.json`. The first version intentionally **does not resume after interruption** or delete worktrees. If blocked, inspect `state.json`, the logs, `git worktree list`, the branch and any PR before deciding how to recover. Do not delete these records to force an unsafe duplicate run. After a successful human merge, clean up worktrees manually only after checking for uncommitted work.
+
+**Important limitations:** This is not a headless permission-approval mechanism. It does **not** pass `--auto`, and any OpenCode permission request that cannot be serviced from the CLI will cause a failure or timeout, leaving evidence for diagnosis. It checks an explicit `openai/...` model ID and rejects `OPENAI_API_KEY` in the shell environment, but **cannot prove which OpenAI credential/payment route the saved OpenCode account uses**; confirm ChatGPT plan access before a run. Logs can contain sensitive output and should not be shared or committed. The script checks the issue is open and has content; `--approve-issue` is the human affirmation that the issue and dependencies are approved, **not** an automated GitHub Projects Ready-field check. It does not independently interpret game acceptance criteria or execute arbitrary test suites: those remain Developer/Reviewer responsibilities, and PR evidence text alone is not proof. No autonomous backlog selection, event listening, automatic Project status writes, or PR merges.
 
 ## Candidate approaches
 
@@ -22,7 +52,7 @@ A small Python script or similarly simple executable, invoked intentionally by t
 5. On confirmed review blockers, hand findings to a new/continued Developer session in the development worktree; then rerun validation and fresh review, with **one bounded correction cycle** initially. On ambiguity, failed tools, timeouts, or repeated defects, stop and escalate.
 6. Return the PR URL, issue, head SHA, validation commands/results, review verdict, evidence and pending Creative Director acceptance. Do not merge, close issues manually, or delete worktrees automatically.
 
-**Why first:** Native `opencode run` already supports one-shot prompts, `--agent`, `--model` and `--format json`; plain subprocess and `gh` operations are easier to inspect and debug than an event-driven service. Sequential execution avoids competing writer sessions and runaway token use. **The runner does not yet exist.**
+**Why first:** Native `opencode run` already supports one-shot prompts, `--agent`, `--model` and `--format json`; plain subprocess and `gh` operations are easier to inspect and debug than an event-driven service. Sequential execution avoids competing writer sessions and runaway token use. **This first version is implemented, with an authenticated live end-to-end pilot still pending.**
 
 ### B. OpenCode native subagents
 
@@ -60,7 +90,7 @@ git status --short --branch
 
 Do not paste any credentials. Confirm the exact connected model and that `producer-reviewer` is recognized with effective read-only tool restrictions. `opencode run --agent build "..." ` is a *documented syntax example*, not evidence that a background session has been successfully launched on this computer. Confirm the CLI supports the flags used before coding the runner.
 
-**Stage 1 — One issue, supervised.** Implement option **A** with a single authorized issue, two **fresh** sessions and one active writer. Use the existing repository contract, explicit process timeouts, limited retries, per-run logs, and a dry-run/preflight mode. Stop on any blocked approval, missing evidence, unverified model/provider, permission prompt or unexpected costs. Verify the final review and PR independently before reporting `ready for human acceptance`.
+**Stage 1 — One issue, supervised.** The standard-library CLI runner and unit tests are now committed. **Next:** perform a dry-run and one explicitly authorized live pilot on the Creative Director's machine. Validate the exact model/provider, permission handling, developer artifact, fresh Reviewer, PR gate and human acceptance. Do not advance to board automation until this succeeds.
 
 **Stage 2 — After the pilot succeeds.** Make the Lead a consistent user-facing entry point that invokes the verified runner through a bounded interface. Introduce event-driven triggers or API orchestration only if continuous monitoring measurably reduces manual work. Do not run a fully autonomous backlog worker by default.
 
