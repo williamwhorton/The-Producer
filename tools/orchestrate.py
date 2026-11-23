@@ -100,7 +100,8 @@ def validate_human_testing(body: str) -> None:
     section = match.group(1).strip()
     if (len(section) < 45
             or not re.search(r"(?m)^\s*(?:[-*]|\d+[.)])\s+\S", section)
-            or re.search(r"(?i)<(?:exact command|feature or behavior|observable result|specific result)>|REPLACE WITH|\bTODO\b|\bTBD\b", section)):
+            or not re.search(r"(?i)\b(?:expected|should|verify|confirm)\b", section)
+            or re.search(r"(?i)<[^>]+>|REPLACE WITH|\bTODO\b|\bTBD\b", section)):
         raise Blocked("Human Testing must contain non-placeholder, actionable steps "
                       "and expected outcomes; include exact commands where applicable.")
 
