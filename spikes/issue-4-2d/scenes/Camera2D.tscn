@@ -1,0 +1,9 @@
+[gd_scene
+format_version = "5"
+metadata = { "editor_icon": "", "custom_node_preset": "" }
+
+[node name="Main" type="Camera2D"]
+layer = 1
+zoom = Vector2(32.0, 32.0)
+grow_bounds_on_zoom = false
+auto_scale_enabled = true
