@@ -1,8 +1,33 @@
 # Simulation boundary
 
-This module owns private simulation timing and event ordering. It runs without
-a scene tree, renderer, HUD, or persistence. The static #27 house preview does
-not instantiate it.
+This module owns simulation timing, event ordering and house routing. It runs
+without a scene tree, renderer, HUD, or persistence. The house preview uses a
+projection of the static floor plan; it does not run the scheduler.
+
+## House layout and routing (#29)
+
+`house_layout.gd` models the existing [#27 preview](../README.md) as one
+authored floor. Coordinates are `(column, floor, row)`. On floor `0`, the
+parlor occupies columns `-4..-1` and the study `0..3`, both in rows `-2..2`.
+The four furniture footprints exclude cells conservatively; the remaining
+cells are traversable. Walls span the partition except for a bidirectional
+door between `(-1, 0, 0)` and `(0, 0, 0)`.
+
+`find_route()` returns a shortest cardinal-cell route including both endpoints,
+or an empty array for invalid, blocked or unreachable endpoints. Callers can
+exclude obstructed cells for a query without mutating the plan. The `front`
+exit in the study is an opening from `(2, 0, 2)` toward `(2, 0, 3)`;
+`route_to_exit()` ends at the interior cell. An exterior cell is never a route
+destination, and reaching the threshold does not decide whether someone leaves.
+
+No floor changes are authored. The [#4 comparison fixture](https://github.com/williamwhorton/The-Producer/issues/4)
+is disposable and only approved a stair *marker*, not character stair routing.
+Other floors are therefore invalid. There is no runtime actor, door lock,
+collision avoidance, or season-content pipeline in this slice.
+
+```sh
+godot --headless --path game --script res://tests/house_navigation.gd
+```
 
 ## Event scheduler (#28)
 

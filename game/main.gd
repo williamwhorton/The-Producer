@@ -4,6 +4,7 @@ const HousePreview = preload("res://observation/house_preview.gd")
 
 
 func _ready() -> void:
+	$Dollhouse.show_plan(HousePreview.floor_plan("--show-navigation" in OS.get_cmdline_user_args()))
 	$Dollhouse.room_selected.connect(_show_room)
 	_show_room(&"")
 

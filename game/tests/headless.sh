@@ -25,4 +25,6 @@ check() {
 check --editor --import
 check --quit-after 2
 check --script res://tests/smoke.gd
+check --script res://tests/smoke.gd -- --show-navigation
 check --script res://tests/scheduler.gd
+check --script res://tests/house_navigation.gd
