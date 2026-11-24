@@ -1,0 +1,5 @@
+config_version=5
+
+[application]
+
+config/name="Issue #5 — Contestant Decision Harness"
