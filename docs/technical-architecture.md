@@ -7,8 +7,8 @@
 - **Observation boundary:** transforms actual world events into production-observable evidence and estimates. Never bypass it for player UI.
 - **World presentation:** fixed-angle 3D orthographic dollhouse as the provisional renderer; camera, mesh, lighting, floor cutaway, selection and visual effects stay renderer-specific, behind a small replaceable presentation interface (2D fallback retained).
 - **UI / producer tools:** HUD, accessible controls and workflow are distinct from the world renderer and domain logic; consume approved observations, stable IDs and application actions, never private world internals or renderer node references for game decisions.
-- **Campaign/persistence:** scenario definitions, season outcomes, franchise-continuity state, contestant disposition, artifact provenance, unlocks and save/load.
-- **Season-outcome evaluation:** evaluate persistent haunting separately from show continuity and any eventual survivor requirement; exact rules remain partly OPEN.
+- **Campaign/persistence:** scenario definitions, season outcomes, operation-continuity and external-exposure state, contestant disposition, artifact provenance, unlocks and save/load.
+- **Season-outcome evaluation:** evaluate persistent haunting separately from future-operation viability, contestant-fate consequences and any eventual survivor/death requirement; exact rules remain partly OPEN.
 - **Debug/test harness:** headless seeded scenarios, traces, assertions and hidden-state inspection restricted to development.
 
 ## Candidate engine evaluation
