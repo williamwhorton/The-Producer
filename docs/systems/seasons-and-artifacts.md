@@ -1,13 +1,13 @@
 # Seasons, Locations and Artifacts
 
 ## Seasons [CONFIRMED]
-Independent reality-show seasons, each with a new location and cast. Candidate locations include isolated farmhouse, suburban mansion, and top-floor city condominium. Their layout, surroundings, public visibility, logistics and contestants should create distinct problems, not simply escalating difficulty.
+Distinct **deceptive residential operations/chapters** with new properties and casts (Issue #1 v0.3); **not** seasons of a confirmed broadcast reality show. Candidate settings include an old isolated farmhouse, suburban mansion and urban penthouse. Their layout, surroundings, scrutiny and contestants should create distinct problems rather than simply escalating difficulty. The means of sustaining the organization and recruiting successive casts remain OPEN.
 
 ## Candidate season data [PROPOSED]
 House graph/rooms; exits; surveillance coverage; external exposure; usable production props; cast roster and motives; scenario modifiers; available supernatural affordances; objectives; failure conditions.
 
 ## Season resolution [MIXED]
-A season primarily seeks a haunting that persists beyond production's presence [CONFIRMED]. The show must remain credible enough to support another season [CONFIRMED]. A surviving contestant may be mandatory [PROPOSED]. Contestant deaths and unexplained disappearances must have believable consequences [CONFIRMED constraint; solutions OPEN]. See `season-outcomes-and-continuity.md`.
+Each operation primarily seeks a haunting that persists after the producer departs [CONFIRMED]. The possibility of future operations must reckon with external scrutiny and participant fates [CONFIRMED direction; precise viability rules OPEN]. Death requirements, a survivor/winner gate, the meaning of contest “removal,” and episode length are OPEN. An actual television franchise is not required. See `season-outcomes-and-continuity.md`.
 
 ## Inheritance [CONFIRMED concept]
 Selected tools, skills, knowledge or haunted artifacts may carry over. Artifacts from a previous haunting can seed supernatural activity or enable a distinctive strategy in a new location.

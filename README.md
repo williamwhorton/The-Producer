@@ -4,7 +4,7 @@
 
 **Status:** Preproduction · **Working title:** The Producer (final branding undecided) · **Design package:** v0.3.
 
-An isometric psychological-horror management sandbox about running a reality show whose secret purpose is to create genuinely haunted locations. Contestants and supernatural entities act autonomously; you manipulate circumstances, manage imperfect information, and attempt to produce a permanent haunting without destroying the television franchise's credibility.
+An isometric psychological-horror management sandbox about staging **deceptive residential prize competitions** whose hidden objective is to create genuinely haunted properties. Contestants believe they have entered a legitimate contest. Behind the scenes, the producer manipulates their circumstances while contestants and supernatural entities act autonomously, information remains imperfect, and the consequences may threaten future operations. **No genuine TV broadcast is required.** Specific confinement rules, participant fates and death/survivor conditions remain open.
 
 ## For developers and AI agents
 1. Read [AGENTS.md](AGENTS.md) before working.

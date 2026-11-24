@@ -15,6 +15,8 @@ The **GitHub Project** is meant to show a credible route from the current design
 
 The plan is **comprehensive by workstream**, not a promise that every candidate mechanic or every listed content item must ship. #20 and related decisions will define the approved MVP baseline; if a story is deferred, document the reason, replacement coverage and updated acceptance criteria. Keep the route to an actual release complete.
 
+**Premise change recorded under Issue #1 (v0.3):** contestants are lured into a deceptive residential prize competition, not necessarily a genuinely filmed/broadcast reality show. This replaces the old franchise assumption in future issue acceptance. The 30-day contest, 8 PM–6 AM room rule, $250,000/deed reward, mysterious removals and possible all-dead ending are **proposed story material**, not approved mechanics. Remaining production/contestant-exit/outcome questions belong to #7/#20 and other future decisions. Existing tickets that assume filming, broadcast or public winners must be interpreted against the approved v0.3 vision and reconciled before implementation.
+
 ## Workflow interpretation and role ownership
 
 | Project Status | Interpretation |
@@ -36,11 +38,11 @@ The following issues may be worked in parallel from current documents; they do *
 
 | Issue(s) | Deliverable | Initial accountable role |
 |---|---|---|
-| [#1](https://github.com/williamwhorton/The-Producer/issues/1) | Confirm/correct baseline vision, requirements and open claims | Creative Director — Ready |
+| [#1](https://github.com/williamwhorton/The-Producer/issues/1) | Approve v0.3 deceptive residential competition baseline; preserve mechanics as OPEN | Creative Director — approval recorded; merge pending |
 | [#20](https://github.com/williamwhorton/The-Producer/issues/20) | Approve MVP scope, supported user journeys and release gates | Creative Director — Ready |
 | [#3](https://github.com/williamwhorton/The-Producer/issues/3) | Propose observation/private-state contract for human approval | Architect — Ready |
 | [#6](https://github.com/williamwhorton/The-Producer/issues/6) | Decide supernatural agency and contestant counterplay limits | Creative Director — Ready |
-| [#7](https://github.com/williamwhorton/The-Producer/issues/7) | Decide haunting outcomes, franchise continuity and credible exits | Creative Director — Ready |
+| [#7](https://github.com/williamwhorton/The-Producer/issues/7) | Decide haunting outcomes, repeat-operation viability and credible quits/removals/exits | Creative Director — Ready |
 | [#16](https://github.com/williamwhorton/The-Producer/issues/16) | Decide producer powers and surveillance channels | Creative Director — Ready |
 | [#17](https://github.com/williamwhorton/The-Producer/issues/17) | Decide time controls and season pacing | Creative Director — Ready |
 | [#4](https://github.com/williamwhorton/The-Producer/issues/4), [#13](https://github.com/williamwhorton/The-Producer/issues/13), [#14](https://github.com/williamwhorton/The-Producer/issues/14), [#15](https://github.com/williamwhorton/The-Producer/issues/15) | Compare visual renderers, test headless simulation and prepare **ADR-0002** | Architect/Developer — #4 In Progress; spikes Ready |
@@ -89,16 +91,16 @@ Prefer small, seeded and explainable simulations. Game logic must not depend on 
 | Issue(s) | Required capability |
 |---|---|
 | [#45](https://github.com/williamwhorton/The-Producer/issues/45) | Post-production haunting persistence, separate from mere activity |
-| [#46](https://github.com/williamwhorton/The-Producer/issues/46) | Franchise continuity, credible consequences and contestant dispositions |
+| [#46](https://github.com/williamwhorton/The-Producer/issues/46) | Repeated-operation continuity, credible consequences and contestant dispositions |
 | [#47](https://github.com/williamwhorton/The-Producer/issues/47) | Start/end/transition seasons using distinct scenario data |
 | [#48](https://github.com/williamwhorton/The-Producer/issues/48) | **Conditional** optional carryover artifact/knowledge implementation if approved by #20/#25 |
 | [#49](https://github.com/williamwhorton/The-Producer/issues/49) | Coherent first playable season with ordinary downtime and horror development |
 | [#50](https://github.com/williamwhorton/The-Producer/issues/50) | Distinct second location/cast and repeatability, or approved smaller variation if #20 narrows scope |
-| [#51](https://github.com/williamwhorton/The-Producer/issues/51) | Player-facing separate haunting and franchise outcome reports |
+| [#51](https://github.com/williamwhorton/The-Producer/issues/51) | Player-facing separate haunting and operation-continuity outcome reports |
 | [#52](https://github.com/williamwhorton/The-Producer/issues/52) | Onboarding, discoverability and first-session guidance |
 | [#53](https://github.com/williamwhorton/The-Producer/issues/53) | Save/reload season and campaign with failure recovery |
 
-The MVP must preserve the ability to play an **artifact-free season** and the confirmed goal of a franchise that can plausibly continue. The exact content count and artifact implementation are conditional until the Creative Director decides them.
+The MVP must preserve the ability to play an **artifact-free operation** and make consequences matter when attempting future operations; **a real TV franchise is not required**. The exact content count and artifact implementation are conditional until the Creative Director decides them.
 
 ## Milestone 5 — Release-quality game and distribution
 
@@ -129,8 +131,8 @@ The MVP must preserve the ability to play an **artifact-free season** and the co
 | G-08 Distinct seasons/locations/casts | #24, #30, #47, #49, #50 |
 | G-09 Artifacts non-mandatory | #25, #47, #48, #56 |
 | G-10 Optional inherited progression | #25, #47, #48, #53 |
-| G-11 Persistent haunting after filming | #7, #23, #45, #51 |
-| G-12 Show-continuity objective | #7, #46, #47, #51 |
+| G-11 Persistent haunting after the operation ends | #7, #23, #45, #51 |
+| G-12 Operation-continuity and outside scrutiny | #7, #46, #47, #51 |
 | G-14 Credible consequences of deaths/absences | #7, #34, #46, #51 |
 | G-13 Survivor mandate | **Proposed only** — investigate with #7/#20, do not impose |
 
