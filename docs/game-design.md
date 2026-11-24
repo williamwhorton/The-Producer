@@ -79,12 +79,12 @@ Architectural intent: game systems produce the event and determine consequences;
 Player-facing estimates of stress/fear/suspicion may exist, but should be uncertain, sourced and observational. The player should infer conspiracy from actions and evidence. Private conversations outside surveillance should not magically appear in production reports.
 
 ## Outcomes and season resolution [MIXED]
-**Primary win objective [CONFIRMED]:** create a genuine haunting that persists after the deceptive operation ends and its organizers depart. The persistence threshold, verification method, death requirements and allowable degrees of success remain OPEN.
+**Sole win objective [CONFIRMED #7]:** establish a persistent anchored entity after production ends. Otherwise fail. Fixed competition duration or no living contestants remaining ends the season; exact duration and persistence test open.
 
 **Continuity/exposure direction [CONFIRMED]:** attempts to run future deceptive contests cannot ignore contestant fates, local rumor, witnesses, family concerns or external investigation. How the organization endures, conceals or fails after an operation remains OPEN; **no credible broadcast TV franchise is required**.
 
-**Survivors, deaths and winners [OPEN]:** whether anyone must survive, contestants must all die, a participant wins a promised prize, or death is necessary for haunting success are not approved gameplay rules.
+**Survivors and deaths [CONFIRMED #7]:** no mandatory survivor, winner or death quota.
 
 **Departures, “removal,” deaths and witnesses [OPEN]:** distinguish voluntary withdrawals and escapes from enforced rule-related removals, deaths and unresolved disappearances; do not assume every removal is death. Contestants and people outside the house have differing partial knowledge; no universal cover-up, death quota or psychic-energy conversion rule is approved. **Original story seed [PROPOSED]:** 30-day stay, 8 PM–6 AM room restriction, large cash/house reward, frightening unexplained removals, and daytime town rumors (see `vision.md`).
 
-Track haunted-location outcome and **operation-continuity/exposure** separately, allowing partial successes and consequential failures. See `systems/season-outcomes-and-continuity.md`.
+The producer evades detection afterward and may repeat the scheme elsewhere regardless of outcome. Exposure affects the current operation only; no separate viability gate. See `systems/season-outcomes-and-continuity.md`.
