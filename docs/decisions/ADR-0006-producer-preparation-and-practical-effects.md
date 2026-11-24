@@ -126,18 +126,30 @@ The Creative Director evaluated **three ways** to constrain quick, nonstructural
 
 **Critical distinction:** fear, belief in a real haunting, and suspicion of human staging need not move together (G-06; candidate S-02). A cluster of apparent disturbances could make one contestant more convinced of ghosts, and another suspicious of a prank. The producer still succeeds at performing allowed staging unseen. **The flat quota and one-slot cost are approved; the numeric quota, eligibility windows and difficulty scaling are not.** No abstract time budget, suspicion-as-action-cost formula, or forced equal contestant outcomes is approved.
 
-## Cast-specific personal triggers drive the overnight menu [CONFIRMED direction]
+## Preselected contestants and compact research dossiers [CONFIRMED direction]
 
-Every contestant has **at least one meaningful phobia or personal history/association** connected with an object, person, memory or idea. **Available overnight minor-alteration choices derive from those contestant-specific associations**, not a universal list of generic scary props. Creative Director examples:
+**The producer personally selected the contestants and conducted background research before the competition began.** The player receives a **brief dossier for every contestant**, comparable to a **baseball card**, containing:
+- **Photo** and identifying name
+- **Age**
+- **Sex**
+- **Occupation**
+- **Extremely brief background** (one or a few short statements), including **an exploitable fear or significant personal event when one is known**
 
-- **Doll phobia:** place or move a doll somewhere the targeted contestant may encounter it.
-- **Deceased family member:** leave a photograph of that family member in an unexpected location.
+**IMPORTANT REVISION:** **Not all contestants have a known exploitable fear, personal trauma or trigger**. Their dossier is still present and may simply contain ordinary background with **no known exploitable hook**. This explicitly **supersedes** the earlier direction that every contestant must have at least one personal trigger. Do not invent an exploitable trauma to fill each card. A contestant with no known hook can still be frightened, affected by the environment, investigate, cooperate or react to supernatural events autonomously.
 
-The producer may plausibly know personal background from casting, vetting or research, but **the actual source and player-facing presentation of these facts remain OPEN**. A background fact available to the producer is not permission to expose a contestant's hidden thoughts, current belief or precise psychological state (ADR-0004).
+For the initial game, casting selection and research are **backstory and starting information**, **not gameplay systems the player must perform**. **Future option, PROPOSED:** allow the player to choose/recruit the contestants and research their vulnerabilities, giving casting strategic consequences in an expanded version. No recruiting process, research minigame, hidden-dossier unlock system, candidate pool or recruitment budget is approved now.
 
-Each candidate still needs a plausible **quick, nonstructural** alteration; a personalized effect requiring equipment is part of **pre-contest preparation**, not an unlimited overnight install. Each qualified choice uses **one slot** of the approved flat nightly count and is staged unseen. Contestants' reactions remain autonomous and can vary: fear, grief, anger, curiosity, investigation or suspicion of a prank. The idea that **every offered option is guaranteed to significantly affect at least one contestant remains PROPOSED (A-11)**, not a guarantee of fear or any specific reaction. Personal associations make consequences plausible and support balancing comparable value.
+### Dossier-driven overnight options
 
-**Still open:** how many hooks a contestant may have, which personal facts the producer knows, menu visibility and target selection, what counts as “significant,” and whether effects can be delayed until later discovery.
+Available **personalized** minor-alteration choices derive from **known exploitable fears or meaningful events in the cast's dossiers**, when present—not from a universal pool of generic scary props. Creative Director examples:
+- **Fear of dolls:** arrange for a doll to appear somewhere unusual for that particular contestant.
+- **Death of a family member:** leave a photograph of that family member somewhere unexpected.
+
+Dossiers are a **legitimate pre-contest research source available to the producer** for known biographical details. Under ADR-0004 they are **not** an omniscient readout of current hidden fear, intent, truthfulness, beliefs or mental state. Their completeness/accuracy beyond the supplied short facts remains undecided, but the basic cards are confirmed. The exact format, portrait art, ordering, whether names/locations link to the surveillance view and how to handle a cast with few/no disclosed hooks remain open.
+
+Any overnight selection must still be a **plausible quick, nonstructural change**, use **one of the fixed nightly slots**, and occur **unseen**. A contestant without a hook in their dossier does **not** receive a fabricated personalized option just to guarantee one per person. Likewise, an elaborate personal effect requiring equipment belongs in **untimed pre-contest preparation** rather than a free nighttime installation.
+
+**NPC autonomy remains mandatory:** a meaningful photograph may cause grief, anger, curiosity, skepticism or other consequences; a doll could provoke fear, investigation or avoidance. **The stronger guarantee that every offered option significantly affects at least one contestant remains PROPOSED (A-11)**. Personal relevance makes an effect plausible; it does not establish a fixed guaranteed fear amount or forced response.
 
 ### Possible guaranteed meaningful consequence — Creative Director suggestion [PROPOSED]
 
@@ -147,7 +159,7 @@ Because **each overnight alteration uses one of a small, fixed number of slots**
 
 **Potential implementation approach [PROPOSED]:** make the **menu of eligible alterations context-aware**: only offer an action in the circumstances where at least one contestant can meaningfully encounter or be affected by the result, or design the staged event to reliably elicit a meaningful *but variable* reaction. A mere ornamental prop that no one encounters should not consume one of the scarce action slots **if a hard impact guarantee is adopted**. This may require balancing, scenario authoring, targeting rules or validation rather than forcing NPC psychology.
 
-**Unresolved:** How to define/test a “significant effect” without covertly scripting contestant choices or exposing hidden state; whether the promise must be immediate or may be fulfilled upon later discovery; what happens when contestants leave or circumstances change after the nightly choice; and whether all eligible options are guaranteed or merely strongly likely to matter. **Cast-specific personal triggers are CONFIRMED as the source of available options; guaranteed impact is still PROPOSED.** No numerical magnitude or hard-gating implementation is approved.
+**Unresolved:** How to define/test a “significant effect” without covertly scripting contestant choices or exposing hidden state; whether the promise must be immediate or may be fulfilled upon later discovery; what happens when contestants leave or circumstances change after the nightly choice; and whether all eligible options are guaranteed or merely strongly likely to matter. **Known dossier-based personal hooks are CONFIRMED as the source of personalized options when available; not every contestant has one, and guaranteed impact is still PROPOSED.** No numerical magnitude or hard-gating implementation is approved.
 
 ## Decisions still needed in #16
 
