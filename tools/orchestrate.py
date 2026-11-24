@@ -467,6 +467,14 @@ def archive_blocked_run(repo: Path, issue: int, state_dir: Path) -> Path:
     if (previous.get("issue") != issue or previous.get("phase") != "blocked"
             or previous.get("pr")):
         raise Blocked("Retry is only allowed for a blocked run with no PR.")
+    old_branch = previous.get("branch")
+    if isinstance(old_branch, str) and old_branch:
+        prior_prs = json_cmd(["gh", "pr", "list", "--repo", REPOSITORY,
+                             "--state", "all", "--head", old_branch,
+                             "--limit", "100", "--json", "number"], repo)
+        if not isinstance(prior_prs, list) or prior_prs:
+            raise Blocked("Previous branch has a GitHub PR or cannot be verified; "
+                          "do not duplicate that work.")
     _, retained = cleanup_worktrees(repo, issue=issue)
     if retained:
         raise Blocked("Previous run still owns worktrees that could not be cleaned: "
@@ -477,8 +485,11 @@ def archive_blocked_run(repo: Path, issue: int, state_dir: Path) -> Path:
     candidates += [x.get("path") for x in previous.get("review_worktrees", [])
                    if isinstance(x, dict)]
     for item in candidates:
-        if isinstance(item, str) and Path(item).resolve() in registered:
-            raise Blocked(f"Previous run worktree remains registered: {item}")
+        if not isinstance(item, str):
+            continue
+        path = Path(item).resolve()
+        if path in registered or path.exists():
+            raise Blocked(f"Previous run worktree still exists: {path}")
     archive = state_dir.with_name(
         state_dir.name + "-history-" +
         dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
