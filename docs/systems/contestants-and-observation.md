@@ -15,6 +15,12 @@ The producer has **already selected and researched the contestants**. Every cont
 
 **Future-only option [PROPOSED]:** let the player select/recruit contestants and perform background research. For the initial game, the casting and research have already taken place offscreen.
 
+## Chronic exposure and resistance to acute events [CONFIRMED direction; model OPEN]
+
+**Chronic disturbances reduce a contestant's resistance to later acute disturbances.** This gives the producer a strategic balance: establish persistent pressure, then time discrete shocks for moments when they will be more consequential. The effect is **individual and exposure-dependent** rather than a global housewide fear bonus. It does **not** force an emotional reaction or dictate an NPC's subsequent behavior.
+
+**OPEN implementation choices:** explicit resilience versus a derived susceptibility modifier; recovery after relief; bounded long-term discomfort; cue-specific habituation; how prior events and personal history affect interpretation; and whether the eventual simulation exposes only sourced behavioral clues rather than hidden values (ADR-0004). The first prototype should test comparable acute events with and without prior chronic load while preserving autonomous differing reactions. See S-07 and the [Issue #16 action mechanics proposal](../issue-16-initial-action-mechanics-proposal.md).
+
 ## Candidate private model [PROPOSED]
 Identity/traits; motives for staying; perceived safety; fear/stress; beliefs about haunting vs production wrongdoing; trust by person; memory of witnessed events; goals/plans; evidence held; knowledge of defensive methods. Do not collapse these into a single omniscient suspicion score.
 
