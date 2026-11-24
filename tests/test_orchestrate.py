@@ -364,6 +364,85 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(count, 0)
         self.assertIn("detached review commit", skipped[0])
 
+    def test_nested_godot_cache_is_recognized_but_other_ignored_data_is_retained(self):
+        nested = self.agent / "spikes" / "issue-4-3d" / ".godot"
+        nested.mkdir(parents=True)
+        self.assertEqual(mod.godot_ignored_cache_dirs(
+            self.agent, ["spikes/issue-4-3d/.godot/"]),
+            [nested])
+        self.assertEqual(mod.godot_ignored_cache_dirs(
+            self.agent, ["spikes/issue-4-3d/.godot/editor/cache.bin"]),
+            [nested])
+        for entries in (["spikes/issue-4-3d/notes.txt"],
+                        ["../user-content/.godot/"],
+                        ["/tmp/.godot/"]):
+            with self.subTest(entries=entries), self.assertRaises(mod.Blocked):
+                mod.godot_ignored_cache_dirs(self.agent, entries)
+
+    def test_merged_review_history_must_contain_sha(self):
+        old_sha, final_sha = "a" * 40, "b" * 40
+        url = "https://github.com/williamwhorton/The-Producer/pull/75"
+        details = {"state": "MERGED", "headRefOid": final_sha,
+                   "body": "Refs #4\nCloses #14"}
+        with patch.object(mod, "json_cmd", return_value=details), \
+             patch.object(mod.subprocess, "run") as check:
+            check.return_value.returncode = 0
+            self.assertTrue(mod.merged_pr_contains_review_commit(
+                self.repo, 14, old_sha, url))
+            self.assertIn(old_sha, check.call_args.args[0])
+            check.return_value.returncode = 1
+            self.assertFalse(mod.merged_pr_contains_review_commit(
+                self.repo, 14, old_sha, url))
+        with patch.object(mod, "json_cmd",
+                          return_value={**details, "state": "OPEN"}), \
+             patch.object(mod.subprocess, "run") as check:
+            self.assertFalse(mod.merged_pr_contains_review_commit(
+                self.repo, 14, old_sha, url))
+            check.assert_not_called()
+        self.assertFalse(mod.merged_pr_contains_review_commit(
+            self.repo, 14, old_sha, "https://example.org/pull/75"))
+
+    def test_nested_godot_cache_is_deleted_only_after_commit_is_verified(self):
+        nested = self.agent / "spikes" / "issue-4-3d" / ".godot"
+        nested.mkdir(parents=True)
+        (nested / "editor-cache.bin").write_text("generated")
+        commands = []
+        def cmd(argv, cwd, **kwargs):
+            commands.append(argv)
+            if "rev-parse" in argv:
+                return "a" * 40
+            if "status" in argv and "--ignored" in argv:
+                return "!! spikes/issue-4-3d/.godot/editor-cache.bin"
+            return ""
+        with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd), \
+             patch.object(mod, "pr_preserves_head", return_value=True):
+            removed, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual((removed, skipped), (1, []))
+        self.assertFalse(nested.exists())
+        self.assertIn(["git", "worktree", "remove", str(self.agent)], commands)
+
+    def test_unverified_commit_cannot_delete_generated_cache(self):
+        nested = self.agent / "spikes" / "issue-4-3d" / ".godot"
+        nested.mkdir(parents=True)
+        (nested / "editor-cache.bin").write_text("generated")
+        def cmd(argv, cwd, **kwargs):
+            if "rev-parse" in argv:
+                return "a" * 40
+            if "status" in argv and "--ignored" in argv:
+                return "!! spikes/issue-4-3d/.godot/editor-cache.bin"
+            return ""
+        with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd), \
+             patch.object(mod, "pr_preserves_head", return_value=False), \
+             patch.object(mod.subprocess, "run") as merge:
+            merge.return_value.returncode = 1
+            removed, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual(removed, 0)
+        self.assertTrue(nested.exists())
+
     def test_legacy_requires_merged_pr(self):
         legacy = self.repo.parent / "The-Producer-issue-13-followup"
         legacy.mkdir()
