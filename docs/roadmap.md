@@ -23,7 +23,7 @@ Implement small, throwaway proofs for headless simulation, isometric view, event
 - Fear, beliefs/suspicion, basic social information exchange and voluntary quitting.
 - One autonomous supernatural entity that may act against producer goals.
 - At least one contestant countermeasure (avoidance or attempted banishment).
-- One early supernatural unlock, a provisional season-resolution report showing haunting persistence and continued-operation/exposure separately, and save/load. Survivor rule is not yet approved.
+- One possible autonomous entity, a binary persistent-haunting outcome report, and save/load. No survival or operational-viability gate.
 - Headless simulation and QA inspector.
 These are sizing suggestions, not approved feature counts.
 
@@ -41,7 +41,7 @@ Performance, accessibility, balance, regression testing, content polish, packagi
 5. Implement seeded contestant decision test harness.
 6. Implement one supernatural entity and one contestant response scenario.
 7. Validate artifact-free season completion feasibility.
-8. Prototype post-operation haunting persistence and continued-operation viability evaluation without committing to a death quota or a contestant-disappearance explanation.
+8. Prototype post-operation haunting persistence evaluation; no operational-viability subsystem or death quota.
 
 ## Evidence standard
 Each milestone requires executable proof, recorded tests, reproducible instructions, known risks and a human approval decision where relevant.

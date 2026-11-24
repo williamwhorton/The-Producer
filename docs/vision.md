@@ -85,8 +85,8 @@ A vignette might show one illustrative image, a brief account of a situation, an
 
 ## Season outcomes and stakes
 - **Persistent haunting [CONFIRMED objective]:** mere energy accumulation is not sufficient; the location must remain haunted independently of the production's ongoing intervention. The precise test for persistence is OPEN.
-- **Operational continuity [CONFIRMED direction]:** the producer must contend with public suspicion, exposed wrongdoing and lasting consequences when attempting future competitions at new sites; the precise conditions for carrying on are OPEN. A legitimate TV franchise is **not** required.
-- **Survivor and death requirements [OPEN]:** whether everyone must die, anyone must survive, someone wins, or a successful haunting can arise without deaths are all unsettled. Do not implement a mandatory kill count or survivor gate.
+- **Operational continuity [CONFIRMED #7]:** the villainous producer evades detection afterward and repeats the scheme elsewhere; no separate viability gate.
+- **Survivor and death requirements [CONFIRMED #7]:** no mandatory survivor, winner or death quota; persistent haunting alone determines success.
 - **Credible contestant accounting [CONFIRMED narrative constraint]:** voluntary exits, enforced removals, deaths and unexplained absences must have meaningful consequences for witnesses, families, townspeople and/or investigators. Who knows what, and how it affects future operations, is OPEN.
 
 See `systems/season-outcomes-and-continuity.md` for the system contract and unresolved choices.
