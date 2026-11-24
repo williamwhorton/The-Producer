@@ -1,13 +1,13 @@
 # Game Design Overview
 
 ## Player role and fantasy [CONFIRMED]
-The player runs a reality-show production whose concealed purpose is to create an authentic haunting. Contestants compete to remain in a house, can quit voluntarily, and are not directly controllable. The production must keep the operation concealed while manipulating fear and supernatural conditions.
+The player orchestrates a deceptive residential prize competition whose concealed purpose is to create an authentic, persistent haunting. The contestants believe they have entered a legitimate contest, but the producer manipulates fear and supernatural conditions behind the scenes. Contestants are autonomous and may attempt to quit, escape, investigate or resist. No genuine television broadcast, public winner, fixed number of days or mandatory body count is required by the approved premise (Issue #1 v0.3).
 
 ## Primary loop [PROPOSED]
 Observe partial evidence -> plan production interventions -> stage scares/manipulations -> watch autonomous contestant and entity responses -> assess fear, suspicion, retention and psychic yield -> adapt/contain consequences -> invest in supernatural development.
 
 ## Tension model [PROPOSED]
-- Fear may produce psychic energy but also trigger quitting, panic, investigation or defensive cooperation.
+- Fear may contribute to haunting formation, but may also trigger attempted withdrawal/escape, panic, investigation or defensive cooperation. Whether deaths or a minimum fear threshold are required remains OPEN.
 - Suspicion of **production wrongdoing** is distinct from belief in a **real haunting**.
 - The producer can plan and stage mundane effects; emerging supernatural entities may act without permission.
 - Contestants can thwart, avoid or neutralize supernatural assets.
@@ -32,12 +32,12 @@ Contestants can form private beliefs and alliances, share or withhold informatio
 Player-facing estimates of stress/fear/suspicion may exist, but should be uncertain, sourced and observational. The player should infer conspiracy from actions and evidence. Private conversations outside surveillance should not magically appear in production reports.
 
 ## Outcomes and season resolution [MIXED]
-**Primary win objective [CONFIRMED]:** create a genuine haunting that persists after the show finishes and the production departs. The persistence threshold, verification method and allowable degrees of success remain OPEN.
+**Primary win objective [CONFIRMED]:** create a genuine haunting that persists after the deceptive operation ends and its organizers depart. The persistence threshold, verification method, death requirements and allowable degrees of success remain OPEN.
 
-**Franchise continuity objective [CONFIRMED]:** a successful operation must preserve the possibility of running a plausible next season of the reality show. Reputation, legal/public attention, contestant accounting and exposure are possible models, not approved mechanical designs.
+**Continuity/exposure direction [CONFIRMED]:** attempts to run future deceptive contests cannot ignore contestant fates, local rumor, witnesses, family concerns or external investigation. How the organization endures, conceals or fails after an operation remains OPEN; **no credible broadcast TV franchise is required**.
 
-**Surviving contestant [PROPOSED]:** require at least one survivor, potentially the public-facing winner. The creative director expressed interest but has not finalized this as a hard rule.
+**Survivors, deaths and winners [OPEN]:** whether anyone must survive, contestants must all die, a participant wins a promised prize, or death is necessary for haunting success are not approved gameplay rules.
 
-**Departures, deaths and public narrative [OPEN]:** distinguish ordinary voluntary exits from deaths and unresolved disappearances. Removing a body is not by itself a believable explanation to the public, particularly across multiple seasons. Do not select a universal cover-up, mandatory death quota, or exact death/energy exchange rate without creative approval.
+**Departures, “removal,” deaths and witnesses [OPEN]:** distinguish voluntary withdrawals and escapes from enforced rule-related removals, deaths and unresolved disappearances; do not assume every removal is death. Contestants and people outside the house have differing partial knowledge; no universal cover-up, death quota or psychic-energy conversion rule is approved. **Original story seed [PROPOSED]:** 30-day stay, 8 PM–6 AM room restriction, large cash/house reward, frightening unexplained removals, and daytime town rumors (see `vision.md`).
 
-Track haunted-location outcome and show-continuity outcome separately, allowing the possibility of partial successes and consequential failures. See `systems/season-outcomes-and-continuity.md`.
+Track haunted-location outcome and **operation-continuity/exposure** separately, allowing partial successes and consequential failures. See `systems/season-outcomes-and-continuity.md`.
