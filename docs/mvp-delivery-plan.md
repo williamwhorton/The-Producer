@@ -4,6 +4,10 @@
 **Owner:** Lead Technical Producer maintains the issue map; **Creative Director** owns game/product decisions and acceptance.  
 **Related:** [#62 — MVP backlog maintenance](https://github.com/williamwhorton/The-Producer/issues/62), [requirements](requirements.md), [vision](vision.md), [open questions](open-questions.md), [project board conventions](project-board-setup.md), [status automation](project-status-automation.md).
 
+## Current execution priority (Creative Director approved)
+
+The [prototype-first milestones](roadmap.md) govern current work. #20 is deferred until a complete playable prototype has been evaluated. Existing MVP/release items below remain future planning inventory, not current commitments or prerequisites to starting #27. #7 supersedes operational viability: #46 is not planned, and outcome/transition work must not require exposure or survival gates. Narrow prototype issue criteria before assignment; use coherent placeholder visuals early. Preserve separate Developer and Reviewer sessions.
+
 ## Why this exists
 
 The **GitHub Project** is meant to show a credible route from the current design to a **releasable minimum viable product**, not just the next few coding tasks. Every necessary category of work must have a backlog issue or a documented dependency that will produce one. Existing issues should be extended rather than duplicated. New issues arise when genuine new work, defects, approved feature changes, prototype findings or release constraints justify them.
