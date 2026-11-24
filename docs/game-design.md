@@ -23,6 +23,14 @@ The producer **personally selected and researched the cast before the competitio
 
 The dossier is an authorized **pre-contest research source** for known biographical facts; it cannot reveal a contestant's present private emotions, thoughts or plans (ADR-0004). **Future-only PROPOSAL:** cast selection and background research become strategic mechanics. The initial game **already has a selected roster and the prepared dossiers**, without requiring a recruitment or research phase. See A-12–A-14 and ADR-0006.
 
+## Chronic pressure and acute interventions [CONFIRMED strategic interaction; quantitative mechanics OPEN]
+
+**Core gameplay strategy:** prepare and maintain **chronic stressors** that gradually **weaken a contestant's resistance to acute disturbances**, then select the **moment and location** of acute scares to take advantage of that vulnerability. The challenge is to **balance and sequence both** rather than simply fill a house with passive stressors or repeatedly trigger loud shocks. This is an **approved design direction**, not approval of specific resistance numbers, event timings or a mandated action ratio.
+
+Chronic cues can become familiar, and their contribution should not scale without bound; **habituation is a proposed balancing mechanism**. Sustained physical discomfort can continue even after it stops being novel. Acute shocks may have greater impact after chronic exposure, but don't directly force fear or predetermined behavior; witnesses may investigate, seek relief, avoid, cooperate or attempt to leave, according to their autonomy. Excessive chronic pressure and repeated acute events have possible behavioral consequences rather than guaranteed producer success. Recovery, synergy formulas, diminishing returns and UI feedback remain OPEN.
+
+In the draft action model, the action's **time profile** (chronic condition, recurring ambient cue, acute shock or persistent object with acute discovery) is distinct from its **producer activation category** (setup, live trigger, overnight staging). See [Issue #16 action proposal](issue-16-initial-action-mechanics-proposal.md) and S-07/S-08.
+
 ## Tension model [PROPOSED]
 - Fear may contribute to haunting formation, but may also trigger attempted withdrawal/escape, panic, investigation or defensive cooperation. Whether deaths or a minimum fear threshold are required remains OPEN.
 - Suspicion of **production wrongdoing** is distinct from belief in a **real haunting**.
