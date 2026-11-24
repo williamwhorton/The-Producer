@@ -6,8 +6,8 @@
 3. **Simulation pacing:** Pausable real-time vs turn/tick-based; desired season duration.
 4. **Observation:** What surveillance can the production plausibly access? How are confidence and stale estimates displayed?
 5. **Contestant resistance:** What knowledge/resources allow exorcism or neutralization, and how do contestants discover them?
-6. **Contestant fates and public plausibility:** How do normal quits, on-show eliminations, deaths and unexplained absences appear to viewers, friends/families, and authorities? What is the credible public continuity of the franchise over several seasons? Do not assume that quietly removing bodies resolves public scrutiny.
-7. **Engine and presentation:** Godot 2D isometric vs 3D orthographic; compare with concrete prototypes.
+6. **Contestant fates, public plausibility and possible deception:** How do normal quits, eliminations, deaths and absences appear to contestants, viewers (if any), families and authorities? How can seasons continue plausibly? **Alternative to explore:** what if the ostensible reality show is partly or entirely a lie told to contestants, rather than a genuine television franchise? This is not approved as a premise change; G-01 stays confirmed pending a separate decision. **Not a blocker** for the provisional engine choice, observation-boundary design or a narrow technical skeleton; resolve before implementing related narratives, exits or season-continuity systems.
+7. **Engine and presentation (provisionally decided):** ADR-0002 approves Godot 4 + GDScript, beginning with fixed-angle 3D orthographic. **Open validation:** preserve the appealing clean/comic-like 2D aesthetic in stylized 3D using cheap assets, test lighting/shadows and room readability, and retain 2D as a fallback before major art spending. Do not interpret this as a final art-direction choice.
 
 ## Priority B — Important after initial prototype
 8. What creates a new supernatural entity and determines its drives?
