@@ -1,17 +1,17 @@
 # ADR-0004 — Private simulation state and producer observation boundary
 
-**Status:** PROPOSED — Creative Director approval required; not a game-system implementation  
+**Status:** APPROVED — Creative Director, 2026-11-23 (America/New_York); architecture boundary only, not a game-system implementation  
 **Date:** 2026-11-23  
 **Owner:** Architect (proposal); Creative Director (decision)  
 **Issue:** [#3 — Private state / observation boundary](https://github.com/williamwhorton/The-Producer/issues/3)  
 **Requirements:** G-02, G-06 (CONFIRMED); S-01, S-02, S-04, T-02 (PROPOSED); T-03 (approved separation principle under ADR-0002)  
 **Dependencies:** [ADR-0002](ADR-0002-engine-and-presentation-approach.md), approved [vision v0.3](../vision.md). Related open decisions: [#16 producer powers/surveillance](https://github.com/williamwhorton/The-Producer/issues/16), [#17 pacing](https://github.com/williamwhorton/The-Producer/issues/17), [#26 UI workflow](https://github.com/williamwhorton/The-Producer/issues/26), [#7 contestant fates](https://github.com/williamwhorton/The-Producer/issues/7).
 
-## Decision sought
+## Approved decision and scope
 
-Approve the **architectural contract** that private contestant/world state is never returned directly to producer-facing gameplay presentation. Instead, an explicit **source-mediated observation projection** creates fresh, allowlisted, attributable records of what the producer could plausibly learn. The producer may infer hidden motives from evidence; the system must not quietly disclose exact beliefs, plans or knowledge.
+The Creative Director approves the **architectural contract** that private contestant/world state is never returned directly to producer-facing gameplay presentation. Instead, an explicit **source-mediated observation projection** creates fresh, allowlisted, attributable records of what the producer could plausibly learn. The producer may infer hidden motives from evidence; the system must not quietly disclose exact beliefs, plans or knowledge.
 
-The Creative Director has already approved *imperfect information* (G-06) and separation of game logic from presentation (T-03). **The exact cameras, surveillance privileges, player-facing uncertainty displays, event-popup behavior, off-site interactions and contestant psychology remain separate, unapproved decisions.** This proposal defines information flow, not those mechanics.
+The Creative Director has already approved *imperfect information* (G-06) and separation of game logic from presentation (T-03). **The exact cameras, surveillance privileges, player-facing uncertainty displays, event-popup behavior, off-site interactions and contestant psychology remain separate, unapproved decisions.** This approval establishes information flow, not those mechanics.
 
 ### Three distinct kinds of knowledge
 
@@ -32,13 +32,13 @@ The simulation publishes one canonical event list; every HUD, 2D/3D renderer, mo
 - **Advantages:** very little initial infrastructure, easy deterministic debugging.
 - **Risks:** an innocent UI path can bypass a filter and expose a private event; source semantics get duplicated across windows, overlays, saves and future town vignettes; refactoring can reintroduce hidden fields. Rejected as the **ordinary player-facing contract**. A complete privileged event log can remain useful for headless tests/development tools only.
 
-### B. Source-mediated projection into a minimal, immutable-by-convention player view (**recommended**)
+### B. Source-mediated projection into a minimal, immutable-by-convention player view (**approved**)
 
 The simulation owns private entities and raw events. A small **observation projector** considers which legitimate observer/device/report could have captured **which portion** of an event at that time; it returns newly constructed allowlisted data. The world renderer, HUD and optional narrative modal consume **only** those player-view records. Estimation is a later, separate derived layer.
 
 - **Advantages:** one audit point; consistent boundaries for isometric/3D rendering, UI, saved reports and off-site vignettes; raw beliefs/intent cannot leak by merely serializing a world event; straightforward negative headless tests.
 - **Costs:** must represent data provenance and observation coverage; UI may need a deliberate `unknown` state and cannot assume every simulation event is displayable.
-- **Recommendation:** choose this **boundary**, without introducing a general-purpose message bus, security framework, external service or unapproved gameplay sensors.
+- **Approved direction:** use this **boundary**, without introducing a general-purpose message bus, security framework, external service or unapproved gameplay sensors.
 
 ## Proposed minimal conceptual data flow
 
@@ -129,15 +129,15 @@ This demonstrates why simply filtering **fields** from a global event is insuffi
 
 For the first production proof, **do not** assume exact cameras, remote listeners, automatic fear scoring or any particular UI confidence number. Test the information contract with **synthetic sources** only; a full sensor system and gameplay psychology are outside #3.
 
-## Specific decisions required from the Creative Director
+## Creative Director decision and outstanding details
 
-**Request approval of the boundary, not the whole game system:**
+**Approved 2026-11-23 (ET):**
 
-1. **Approve / amend:** private truth must be separate from an explicit source-grounded, allowlisted `Observation` layer; all player-facing surfaces consume that layer, not raw world state. This includes the 3D house view and optional off-site event modals.
-2. **Approve / amend:** unknown/unmonitored details are withheld; information received indirectly is presented as a **report/claim**, not silently elevated to fact. Do you want a different rule for the producer's knowledge of supernatural assets or producer-authored interventions? Specific scopes can be decided under #16.
-3. **Defer:** exact surveillance devices, off-site reporters, timestamp wording, qualitative vs numeric estimates, pause semantics, player actions, and exact simulation state fields to #16/#17/#26 and later relevant design issues.
+1. Private world truth is separated from a **single source-grounded, allowlisted observation projection**. All ordinary player-facing surfaces—including 2D/3D world rendering, UI/HUD, reports and optional illustrated off-site vignettes—consume authorized, detached view data, not raw hidden state.
+2. **Unknown or unmonitored details remain withheld.** Indirect testimony and observations are identified as reports or claims, not silently promoted into verified facts; the producer is not omniscient about contestant or supernatural intent.
+3. **Explicitly deferred:** approved camera/microphone/crew/town sources, source access rules and any producer knowledge exceptions, presentation of uncertainty or freshness, precise timestamps, player actions, modal pause semantics, exact interface/schema, and contestant behavior variables. These remain #16/#17/#26 and later decisions.
 
-**Approval record:** _Pending Creative Director decision. No schema, player-visible mechanic, producer power or implementation is approved merely by the proposal PR._
+**Approval authority:** Creative Director, in conversation on 2026-11-23 (America/New_York). This approval is **for the information boundary only**. It does not adopt the illustrative sensor system, dictate specific numeric mechanics, authorize production code outside independently approved tasks, or imply that the PR was merged.
 
 ## Consequences and follow-up
 
@@ -145,7 +145,7 @@ For the first production proof, **do not** assume exact cameras, remote listener
 - Makes swapping 2D/3D rendering (ADR-0002) less disruptive because both consume authorized view data rather than world internals.
 - Simplifies source attribution in optional still-image/text town vignettes and permits private activity to affect later visible events without instant omniscient notifications.
 - Imposes some boilerplate for observation projection and fixture tests; this is preferable to scattering privacy filters across all UI components.
-- **Issue #5 stays blocked until the Creative Director approves this contract** (and the previously approved engine choice is in place). #5 may then implement a small seeded contestant-decision harness; no full AI psychology, actual surveillance equipment or producer gameplay scope is implied.
+- **Issue #5's architectural prerequisites are satisfied by the Creative Director's approval of this boundary and the previously approved engine direction.** Move #5 into implementation only after the ADR is merged/recorded and the normal issue/task authorization is confirmed; a small seeded contestant-decision harness is the intended scope, not a full AI psychology, actual surveillance equipment or producer gameplay system.
 - Detailed sensor/reporter privileges need #16; pacing #17; illustrated UI proof #26; contestant-exit outcomes #7; MVP size and content #20. If the human changes any of these in ways that affect source attribution, update this ADR rather than silently weakening G-06.
 
 **Existing feasibility evidence, not proof of this contract:** [Issue #15 headless prototype](../../spikes/issue-4-simulation/README.md) showed deterministic 100-tick repeatability and a copy-only observation projection. It did **not** implement capture coverage, uncertain testimony, production UI, delayed reports or a release-build boundary.
