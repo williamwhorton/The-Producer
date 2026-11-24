@@ -32,6 +32,14 @@ The Creative Director's earlier fiction notes inspired the approved deceptive-co
 
 **Do not canonize:** mandatory mass death, a survivor/winner, scripted removal events, fixed hours, a death-to-psychic-energy formula, fixed day count, specific rewards or a predetermined ending. Contestants retain autonomous choices and credible external relationships; actual and apparent fates cannot be waved away. Preserve the narrative seed for later review under #7, #17, #20 and #24.
 
+## Off-site encounters and narrative interludes [PRESENTATION PROPOSAL]
+
+Interactions in the surrounding town, encounters with planted locals, rumors, interviews, recovered notes or other events away from the explorable house **could be presented as pause-and-resolve text-and-still-image vignettes**, rather than requiring a simulated or fully rendered town. Reference formats are event windows in Paradox strategy games and the choice-driven narrative interludes in *Warhammer 40,000: Rogue Trader*; these are examples of a format, not content to copy.
+
+A vignette might show one illustrative image, a brief account of a situation, and **zero or more choices** for the producer when there is an actual decision to make. Some events may be informational only. This could reduce environment/animation costs while giving townspeople, local folklore and the house's reputation narrative presence.
+
+**Not yet decided:** what off-site activities contestants can do; who triggers and observes the event; whether player input always pauses game time, whether off-site actions have ongoing simulation effects, and whether a vignette can reveal information the producer did not plausibly obtain. The future design must honor G-06 and Issue #3's observation boundary: a contestant's private off-site experience must not become an omniscient player report without a grounded source. This event-window concept belongs to **UI/application presentation**, not the 2D/3D world renderer or core game rules; defer detailed selection and testing to #26/#17 and MVP scope #20.
+
 ## Visual and tonal reference direction [CREATIVE DIRECTION; detailed style OPEN]
 
 - **References:** *Darkest Dungeon* and *Cult of the Lamb* as broad examples of strong graphic silhouettes, stylized surfaces, controlled lighting and horror contrasted with appealing, readable imagery. Do not copy their assets, character designs or compositions.
