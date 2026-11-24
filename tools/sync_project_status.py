@@ -17,6 +17,27 @@ CLOSING_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+"
     r"(?:(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+))?#(?P<number>\d+)\b", re.I
 )
+PR_TIMELINE_TYPES = {
+    "reopened": "ReopenedEvent",
+    "ready_for_review": "ReadyForReviewEvent",
+    "converted_to_draft": "ConvertToDraftEvent",
+}
+PR_TIMELINE_QUERY = """
+query ($id: ID!) {
+  node(id: $id) {
+    ... on PullRequest {
+      timelineItems(last: 1, itemTypes: [REOPENED_EVENT, READY_FOR_REVIEW_EVENT, CONVERT_TO_DRAFT_EVENT]) {
+        nodes {
+          __typename
+          ... on ReopenedEvent { createdAt }
+          ... on ReadyForReviewEvent { createdAt }
+          ... on ConvertToDraftEvent { createdAt }
+        }
+      }
+    }
+  }
+}
+"""
 
 
 class SyncError(Exception):
@@ -44,6 +65,12 @@ def closing_issues(body, owner, repo):
             continue
         result.add(int(match.group("number")))
     return sorted(result)
+
+
+def same_repo_main_pr(pr, owner, repo):
+    head = pr.get("head", {}).get("repo") or {}
+    return (head.get("full_name", "").casefold() == f"{owner}/{repo}".casefold()
+            and pr.get("base", {}).get("ref") == "main")
 
 
 def parse_bootstrap(value):
@@ -88,11 +115,7 @@ def decide_event(event_name, payload, owner, repo):
 
     if event_name == "pull_request_target":
         pr = payload.get("pull_request", {})
-        head = pr.get("head", {}).get("repo") or {}
-        if head.get("full_name", "").casefold() != f"{owner}/{repo}".casefold():
-            print("Ignoring PR from outside this repository")
-            return {}
-        if pr.get("base", {}).get("ref") != "main":
+        if not same_repo_main_pr(pr, owner, repo):
             return {}
         numbers = closing_issues(pr.get("body") or "", owner, repo)
         if action in ("opened", "reopened", "ready_for_review"):
@@ -108,7 +131,7 @@ def decide_event(event_name, payload, owner, repo):
     return {}
 
 
-def superseded(event_name, payload, comments, owner):
+def superseded(event_name, payload, comments, owner, *, pr_time=None):
     """Older jobs must not undo a later owner command on an open issue."""
     commands = [
         c for c in comments
@@ -122,10 +145,8 @@ def superseded(event_name, payload, comments, owner):
         posted = payload["comment"]
         return latest["id"] != posted["id"] or latest["body"] != posted["body"]
     if event_name == "pull_request_target":
-        pr = payload["pull_request"]
-        timestamp = pr["created_at"] if payload["action"] == "opened" else pr["updated_at"]
-        return latest["created_at"] > timestamp or (
-            latest["created_at"] == timestamp and comment_status(latest["body"]) == "Blocked")
+        # GitHub timestamps have second precision; an explicit command wins a tie.
+        return latest["created_at"] >= pr_time
     if event_name == "issues" and payload["action"] in ("opened", "reopened"):
         key = "created_at" if payload["action"] == "opened" else "updated_at"
         # On a same-second tie, prefer an explicit open status over default Backlog.
@@ -134,28 +155,19 @@ def superseded(event_name, payload, comments, owner):
     return False
 
 
-def newer_project_state(event_name, event, project, number):
-    """A delayed status event must not overwrite newer authoritative project state.
-
-    PR lifecycle transitions (opened, ready_for_review, closed) move the Project
-    card without posting a new owner command, so a delayed /status comment processed
-    after them loses by chronology. Explicit owner commands still win via superseded().
-    The check only applies when the project state is demonstrably newer than the
-    event, so fresh comments keep applying.
-    """
-    if event_name != "issue_comment":
-        return False
-    current = project.current_status(number)
-    if not isinstance(current, tuple) or len(current) != 2:
-        return False
-    status, updated_at = current
-    created_at = (event.get("comment") or {}).get("created_at")
-    if not status or not updated_at or not isinstance(created_at, str):
-        return False
-    try:
-        return status in ("In Progress", "In Review") and updated_at > created_at
-    except TypeError:
-        return False
+def pr_event_time(api, payload):
+    pr, action = payload["pull_request"], payload["action"]
+    if action == "opened":
+        return pr["created_at"]
+    if action == "closed":
+        return pr["closed_at"]
+    transition = api.pr_transition(pr)
+    if not transition:
+        raise SyncError(f"Cannot verify PR #{pr['number']} {action} timeline event")
+    if transition["__typename"] == PR_TIMELINE_TYPES[action]:
+        return transition["createdAt"]
+    # Another ready/draft/reopen event already superseded this webhook.
+    return None
 
 
 class GitHub:
@@ -220,6 +232,33 @@ class GitHub:
                 return
             page += 1
 
+    def pr_transition(self, pr):
+        node = self.graphql(PR_TIMELINE_QUERY, {"id": pr["node_id"]})["node"]
+        if not node or "timelineItems" not in node:
+            raise SyncError(f"Cannot read PR #{pr['number']} lifecycle timeline")
+        return next(iter(node["timelineItems"]["nodes"]), None)
+
+    def newer_pr_transition(self, owner, repo, number, since):
+        """Look for newer source events, not later writes to a Project item."""
+        page = 1
+        while True:
+            batch = self.request(
+                f"/repos/{owner}/{repo}/pulls?state=all&base=main&per_page=100&page={page}")
+            for pr in batch:
+                if (not same_repo_main_pr(pr, owner, repo)
+                        or number not in closing_issues(pr.get("body"), owner, repo)):
+                    continue
+                if pr["created_at"] > since:
+                    return True
+                if not pr["merged_at"] and pr["closed_at"] and pr["closed_at"] > since:
+                    return True
+                transition = self.pr_transition(pr)
+                if transition and transition["createdAt"] > since:
+                    return True
+            if len(batch) < 100:
+                return False
+            page += 1
+
 
 PROJECT_QUERY = """
 query ($owner: String!, $number: Int!) {
@@ -241,7 +280,6 @@ query ($owner: String!, $repo: String!, $number: Int!) {
       projectItems(first: 100) {
         nodes {
           id
-          updatedAt
           project { id }
           fieldValues(first: 30) {
             nodes {
@@ -299,18 +337,13 @@ class Project:
                 continue
             for field in item.get("fieldValues", {}).get("nodes", []):
                 if field and field.get("field", {}) and field["field"].get("id") == self.field:
-                    return item["id"], field["name"], issue["id"], item.get("updatedAt")
-            return item["id"], None, issue["id"], item.get("updatedAt")
-        return None, None, issue["id"], None
-
-    def current_status(self, number):
-        """Current Status and when its Project item was last updated (None when unknown)."""
-        item, status, _issue, updated_at = self.find_item(number)
-        return status, updated_at
+                    return item["id"], field["name"], issue["id"]
+            return item["id"], None, issue["id"]
+        return None, None, issue["id"]
 
     def update(self, number, status, *, preserve_open=False):
         status = normalize_status(status)
-        item, current, issue, _updated_at = self.find_item(number)
+        item, current, issue = self.find_item(number)
         if preserve_open and current and current != "Done":
             print(f"#{number}: keep existing {current}")
             return
@@ -370,13 +403,18 @@ def main():
         issue = api.issue(owner, repo, number)
         if status == "Done" and issue["state"] != "closed":
             raise SyncError(f"Cannot mark open issue #{number} Done")
-        if status != "Done" and issue["state"] == "closed":
+        if issue["state"] == "closed":
             project.update(number, "Done")
-        elif status != "Done" and superseded(
-                event_name, event, api.issue_comments(owner, repo, number), owner):
+            continue
+        pr_time = pr_event_time(api, event) if event_name == "pull_request_target" else None
+        if event_name == "pull_request_target" and pr_time is None:
+            print(f"#{number}: skip stale PR webhook; newer PR lifecycle event exists")
+        elif superseded(event_name, event, api.issue_comments(owner, repo, number),
+                        owner, pr_time=pr_time):
             print(f"#{number}: skip stale status event; newer owner command exists")
-        elif status != "Done" and newer_project_state(event_name, event, project, number):
-            print(f"#{number}: skip stale status event; newer project state exists")
+        elif event_name == "issue_comment" and api.newer_pr_transition(
+                owner, repo, number, event["comment"]["created_at"]):
+            print(f"#{number}: skip stale status comment; newer PR lifecycle event exists")
         else:
             project.update(number, status)
     if not updates:

@@ -156,14 +156,16 @@ class EventTests(unittest.TestCase):
     def test_newer_owner_command_supersedes_queued_pr_and_comment_jobs(self):
         opened = "2026-11-24T21:00:00Z"
         failed = "2026-11-24T21:02:00Z"
-        claim = {"id": 4, "body": "/status In Progress", "created_at": opened,
+        claim = {"id": 4, "body": "/status In Progress", "created_at": "2026-11-24T20:59:00Z",
                  "user": {"login": self.OWNER}}
         blocked = {"id": 5, "body": "/status Blocked", "created_at": failed,
                    "user": {"login": self.OWNER}}
         stranger = {**blocked, "id": 6, "body": "/status Ready", "user": {"login": "stranger"}}
         pr = {"action": "opened", "pull_request": {"created_at": opened}}
-        self.assertFalse(sync.superseded("pull_request_target", pr, [claim], self.OWNER))
-        self.assertTrue(sync.superseded("pull_request_target", pr, [claim, blocked], self.OWNER))
+        self.assertFalse(sync.superseded("pull_request_target", pr, [claim], self.OWNER, pr_time=opened))
+        self.assertTrue(sync.superseded("pull_request_target", pr, [claim, blocked], self.OWNER, pr_time=opened))
+        self.assertTrue(sync.superseded("pull_request_target", pr, [{**blocked, "created_at": opened}],
+                                        self.OWNER, pr_time=opened))
         self.assertTrue(sync.superseded("issue_comment", {"comment": claim}, [claim, blocked], self.OWNER))
         self.assertFalse(sync.superseded("issue_comment", {"comment": blocked},
                                          [claim, blocked, stranger], self.OWNER))
@@ -204,41 +206,76 @@ class EventTests(unittest.TestCase):
                 else:
                     project.return_value.update.assert_called_once_with(4, expected)
 
-    def run_comment_event(self, *, project_state, comment_time):
-        """Process one /status In Progress issue_comment with a mocked board."""
-        event = {"action": "created", "issue": {"number": 4, "state": "open"},
-                 "comment": {"id": 42, "body": "/status In Progress",
-                              "created_at": comment_time,
-                              "user": {"login": self.OWNER}}}
+    def run_status_job(self, event_name, event, *, prs, comments, transition=None, state="open"):
+        def request(path, payload=None):
+            if path.endswith("/issues/4"):
+                return {"state": state}
+            if "/issues/4/comments?" in path:
+                return comments
+            if "/pulls?state=all&base=main&" in path:
+                return prs
+            if path == "/graphql":
+                self.assertEqual(payload["variables"], {"id": "PR_123"})
+                self.assertIn("... on ReadyForReviewEvent { createdAt }", payload["query"])
+                return {"data": {"node": {"timelineItems": {"nodes": [transition] if transition else []}}}}
+            self.fail(f"Unexpected GitHub request: {path}")
+
         with tempfile.TemporaryDirectory() as tmp:
             event_path = Path(tmp) / "event.json"
             event_path.write_text(json.dumps(event))
             with patch.dict(os.environ, {"GITHUB_REPOSITORY": f"{self.OWNER}/{self.REPO}",
                                           "PROJECT_NUMBER": "7",
-                                          "GITHUB_EVENT_NAME": "issue_comment",
+                                          "PROJECTS_TOKEN": "test",
+                                          "GITHUB_EVENT_NAME": event_name,
                                           "GITHUB_EVENT_PATH": str(event_path)}), \
-                 patch.object(sync, "GitHub") as github, \
+                 patch.object(sync.GitHub, "request", side_effect=request), \
                  patch.object(sync, "Project") as project:
-                github.return_value.issue.return_value = {"state": "open"}
-                github.return_value.issue_comments.return_value = []
-                project.return_value.current_status.return_value = project_state
                 self.assertEqual(sync.main(), 0)
-        return project.return_value.update.call_args
+        return [call.args for call in project.return_value.update.call_args_list]
+
+    def pr_list_entry(self):
+        return {"number": 123, "node_id": "PR_123", "state": "open", "draft": False,
+                "head": {"repo": {"full_name": f"{self.OWNER}/{self.REPO}"}},
+                "base": {"ref": "main"}, "body": "Closes #4",
+                "created_at": "2026-11-24T21:00:00Z",
+                "updated_at": "2026-11-24T21:10:00Z", "closed_at": None, "merged_at": None}
+
+    def comment_event(self, body, created_at):
+        return {"action": "created", "issue": {"number": 4, "state": "open"},
+                "comment": {"id": 42, "body": body, "created_at": created_at,
+                            "user": {"login": self.OWNER}}}
 
     def test_delayed_in_progress_comment_does_not_overwrite_newer_ready_pr_transition(self):
-        # Regression: an older /status In Progress comment processed after a newer
-        # ready PR transition (board already at In Review) must not overwrite it.
-        update = self.run_comment_event(
-            project_state=("In Review", "2026-11-24T21:10:00Z"),
-            comment_time="2026-11-24T21:09:30Z")
-        self.assertIsNone(update)
+        pr = self.pr_list_entry()
+        event = self.comment_event("/status In Progress", "2026-11-24T21:03:00Z")
+        sources = {"prs": [pr], "comments": [event["comment"]],
+                   "transition": {"__typename": "ReadyForReviewEvent", "createdAt": "2026-11-24T21:05:00Z"}}
+        self.assertEqual(self.run_status_job("pull_request_target", {
+            "action": "ready_for_review", "pull_request": pr}, **sources), [(4, "In Review")])
+        self.assertEqual(self.run_status_job("issue_comment", event, **sources), [])
 
-    def test_comment_applies_when_project_state_is_not_newer(self):
-        # Same event when the board state predates the comment: it still applies.
-        update = self.run_comment_event(
-            project_state=("In Progress", "2026-11-24T21:08:00Z"),
-            comment_time="2026-11-24T21:09:30Z")
-        self.assertEqual(update.args, (4, "In Progress"))
+    def test_blocked_wins_if_older_pr_open_job_writes_review_after_comment_was_posted(self):
+        pr = self.pr_list_entry()
+        event = self.comment_event("/status Blocked", "2026-11-24T21:03:00Z")
+        opened = {"action": "opened", "pull_request": pr}
+        # The old job read comments before Blocked was posted but its write landed
+        # after the post. Neither its write time nor PR updated_at is event evidence.
+        self.assertEqual(self.run_status_job("pull_request_target", opened, prs=[pr], comments=[]),
+                         [(4, "In Review")])
+        self.assertEqual(self.run_status_job("issue_comment", event, prs=[pr], comments=[event["comment"]]),
+                         [(4, "Blocked")])
+        self.assertEqual(self.run_status_job("pull_request_target", opened,
+                                             prs=[pr], comments=[event["comment"]]), [])
+
+    def test_newer_owner_override_uses_ready_event_time_not_pr_updated_at(self):
+        pr = self.pr_list_entry()
+        event = self.comment_event("/status Blocked", "2026-11-24T21:07:00Z")
+        sources = {"prs": [pr], "comments": [event["comment"]],
+                   "transition": {"__typename": "ReadyForReviewEvent", "createdAt": "2026-11-24T21:05:00Z"}}
+        self.assertEqual(self.run_status_job("pull_request_target", {
+            "action": "ready_for_review", "pull_request": pr}, **sources), [])
+        self.assertEqual(self.run_status_job("issue_comment", event, **sources), [(4, "Blocked")])
+        self.assertEqual(self.run_status_job("issue_comment", event, state="closed", **sources), [(4, "Done")])
 
 
 class ProjectTests(unittest.TestCase):

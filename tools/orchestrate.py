@@ -840,15 +840,13 @@ QUEUE_ISSUE_QUERY = """
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
-      number lastEditedAt
+      number lastEditedAt state stateReason closedAt
       closedByPullRequestsReferences(first: 1, includeClosedPrs: true) {
         totalCount
         nodes { number repository { nameWithOwner } }
       }
       openImplementation: closedByPullRequestsReferences(first: 1) { totalCount }
-      timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT,
-                                          BLOCKED_BY_ADDED_EVENT, BLOCKED_BY_REMOVED_EVENT,
-                                          BLOCKING_ADDED_EVENT, BLOCKING_REMOVED_EVENT]) {
+      lifecycle: timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT]) {
         nodes {
           __typename
           ... on ReopenedEvent { createdAt }
@@ -862,6 +860,18 @@ query($owner: String!, $repo: String!, $number: Int!) {
               }
             }
           }
+        }
+      }
+      dependencyChanges: timelineItems(last: 1, itemTypes: [
+        BLOCKED_BY_ADDED_EVENT, BLOCKED_BY_REMOVED_EVENT,
+        BLOCKING_ADDED_EVENT, BLOCKING_REMOVED_EVENT
+      ]) {
+        nodes {
+          __typename
+          ... on BlockedByAddedEvent { createdAt }
+          ... on BlockedByRemovedEvent { createdAt }
+          ... on BlockingAddedEvent { createdAt }
+          ... on BlockingRemovedEvent { createdAt }
         }
       }
     }
@@ -897,11 +907,15 @@ def accepted_dependency(detail):
     if detail["state"] != "closed" or detail.get("state_reason") != "completed":
         return False
     graph = detail["graph"]
-    events = graph["timelineItems"]["nodes"]
+    events = graph["lifecycle"]["nodes"]
     if not events or events[0]["__typename"] != "ClosedEvent":
         return False
     event = events[0]
-    if (event["stateReason"] != "COMPLETED" or event["createdAt"] != detail.get("closed_at")
+    # The timeline entry can be recorded a second or more after the issue closes.
+    # Compare the two issue snapshots, not the timeline entry against closed_at.
+    if (graph["state"] != "CLOSED" or graph["stateReason"] != "COMPLETED"
+            or graph["closedAt"] != detail.get("closed_at")
+            or event["stateReason"] != "COMPLETED"
             or graph["openImplementation"]["totalCount"]):
         return False
     closer = event["closer"]
@@ -1035,7 +1049,7 @@ class ReadyBoard:
         return [
             pr for pr in self.api(
                 f"repos/{REPOSITORY}/pulls?state=all&per_page=100", pages=True)
-            if not pr.get("merged") and implementation_pr(pr, number)
+            if implementation_pr(pr, number) and not pr.get("merged_at")
         ]
 
     def status_commands(self, number):
@@ -1103,12 +1117,6 @@ def queue_candidate(board, number, *, claim=None, current_pr=None):
         raise Blocked("missing/unknown native Type; use the metadata backfill")
     if not (detail.get("body") or "").strip() or detail["locked"]:
         raise Blocked("missing requirements or issue is locked")
-    graph = board.graph_issue(number)
-    linked = graph["closedByPullRequestsReferences"]
-    if linked["totalCount"]:
-        expected = {"number": current_pr, "repository": {"nameWithOwner": REPOSITORY}}
-        if current_pr is None or linked["totalCount"] != 1 or linked["nodes"] != [expected]:
-            raise Blocked("unexpected linked implementation PR; inspect it instead")
     fields = board.api(f"repos/{REPOSITORY}/issues/{number}/issue-field-values")
     if not isinstance(fields, list):
         raise GitHubUnavailable(f"Cannot verify issue fields for #{number}.")
@@ -1129,6 +1137,14 @@ def queue_candidate(board, number, *, claim=None, current_pr=None):
         if dependency["html_url"] != f"https://github.com/{REPOSITORY}/issues/{linked}":
             raise Blocked("external or unverifiable native prerequisite; reconcile with the owner")
         native.add(linked)
+    # Read timeline freshness after the REST edge list so a recently removed
+    # blocker cannot disappear from the list without checking its removal event.
+    graph = board.graph_issue(number)
+    linked = graph["closedByPullRequestsReferences"]
+    if linked["totalCount"]:
+        expected = {"number": current_pr, "repository": {"nameWithOwner": REPOSITORY}}
+        if current_pr is None or linked["totalCount"] != 1 or linked["nodes"] != [expected]:
+            raise Blocked("unexpected linked implementation PR; inspect it instead")
     dependencies = declared_prerequisites(detail["body"], native)
     if number in dependencies:
         raise Blocked("issue cannot depend on itself")
@@ -1141,7 +1157,8 @@ def queue_candidate(board, number, *, claim=None, current_pr=None):
         commands = commands[1:]
     command = commands[0] if commands else None
     boundary = max([graph["lastEditedAt"] or ""]
-                   + [e["createdAt"] for e in graph["timelineItems"]["nodes"]])
+                   + [e["createdAt"] for key in ("lifecycle", "dependencyChanges")
+                      for e in graph[key]["nodes"]])
     if (not command or command["body"].strip().casefold() != "/status ready"
             or command["updated_at"] != command["created_at"]
             or command["created_at"] <= boundary):

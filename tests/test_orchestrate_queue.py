@@ -57,6 +57,7 @@ class FakeBoard(mod.ReadyBoard):
         self.fields = {}
         self.blocked_by = {}
         self.events = {}
+        self.dependency_events = {}
         self.linked_prs = {}
         self.open_linked_prs = {}
         self.prs = []
@@ -93,7 +94,11 @@ class FakeBoard(mod.ReadyBoard):
             linked = self.linked_prs.get(n, [])
             return {"repository": {"issue": {
                 "number": n, "lastEditedAt": self.issues[n].get("lastEditedAt"),
-                "timelineItems": {"nodes": self.events.get(n, [])},
+                 "state": self.issues[n]["state"].upper(),
+                 "stateReason": (self.issues[n].get("state_reason") or "").upper() or None,
+                 "closedAt": self.issues[n].get("closed_at"),
+                 "lifecycle": {"nodes": self.events.get(n, [])[-1:]},
+                 "dependencyChanges": {"nodes": self.dependency_events.get(n, [])[-1:]},
                 "closedByPullRequestsReferences": {"totalCount": len(linked), "nodes": linked[:1]},
                 "openImplementation": {"totalCount": self.open_linked_prs.get(n, 0)},
             }}}
@@ -223,6 +228,29 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.ordered_numbers(), [])
         self.assertIn("WAIT #4", self.output.getvalue())
 
+    def test_owner_merged_pr_from_rest_list_unlocks_successor_linked_after_closure(self):
+        self.board.add(30, body="Implement the successor")
+        self.board.add(27, status="Done")
+        self.board.blocked_by[30] = [issue(27)]
+        self.board.accept(27, closer={
+            "__typename": "PullRequest", "state": "MERGED", "baseRefName": "main",
+            "repository": {"nameWithOwner": mod.REPOSITORY}, "mergedBy": {"login": mod.OWNER},
+        })
+        # GitHub recorded closing #27 and its timeline event one second apart.
+        self.board.issues[27]["closed_at"] = "2026-11-24T16:12:31Z"
+        self.board.events[27][0]["createdAt"] = "2026-11-24T16:12:32Z"
+        self.board.dependency_events[27] = [{"__typename": "BlockingAddedEvent", "createdAt": EARLIER}]
+        self.board.dependency_events[30] = [{"__typename": "BlockedByAddedEvent", "createdAt": EARLIER}]
+        self.board.link_prs(27, 92)
+        # The /pulls list schema has merged_at, not the detail endpoint's merged boolean.
+        self.board.prs.append({"number": 92, "state": "closed", "draft": False,
+                               "body": "Closes #27",
+                               "head": {"ref": "agent/issue-27-20261124t160029z-bd57"},
+                               "merged_at": "2026-11-24T16:12:29Z"})
+        self.assertEqual(self.ordered_numbers(), [30])
+        self.board.events[27][-1]["closer"]["mergedBy"]["login"] = "collaborator"
+        self.assertEqual(self.ordered_numbers(), [])
+
     def test_native_dependency_removal_after_ready_requires_fresh_authorization(self):
         self.board.add(4, body="Do the queue work")
         ready = self.board.comments[4][0]
@@ -236,27 +264,38 @@ class QueueTests(unittest.TestCase):
         # The open edge is removed after the owner posted /status Ready: the old
         # authorization must not silently release the issue.
         self.board.blocked_by[4] = [issue(7)]
-        self.board.events[4] = [{"__typename": "BlockedByRemovedEvent", "id": 4,
-                                "createdAt": NOW, "blockingIssue": {"number": 8}}]
+        self.board.dependency_events[4] = [
+            {"__typename": "BlockedByRemovedEvent", "createdAt": NOW}]
         self.assertEqual(self.ordered_numbers(), [])
         self.assertIn("SKIP #4", self.output.getvalue())
+        ready["created_at"] = ready["updated_at"] = "2026-11-24T21:19:00Z"
+        self.assertEqual(self.ordered_numbers(), [4])
 
     def test_manual_completion_with_branch_only_implementation_pr_does_not_unlock_successor(self):
         self.board.add(4, body="Queue prerequisites: #7")
         self.board.add(7, status="Done")
         self.board.accept(7)
         self.assertEqual(self.ordered_numbers(), [4])  # Accepted non-PR completion.
-        self.board.prs.append({"number": 90, "body": None,
-                               "head": {"ref": "agent/issue-7-wip"}})
-        self.assertEqual(self.ordered_numbers(), [])
+        for state, draft in [("open", True), ("closed", False)]:
+            with self.subTest(state=state, draft=draft):
+                self.board.prs[:] = [{"number": 90, "body": None, "merged_at": None,
+                                      "state": state, "draft": draft,
+                                      "head": {"ref": "agent/issue-7-wip"}}]
+                self.assertEqual(self.ordered_numbers(), [])
         self.assertIn("WAIT #4", self.output.getvalue())
 
     def test_queue_issue_query_tracks_native_dependency_changes(self):
         # Finding 1: the runner must read native add/remove timeline events so a
         # stale Ready cannot survive dependency changes.
-        for typename in ("BLOCKED_BY_ADDED_EVENT", "BLOCKED_BY_REMOVED_EVENT",
-                         "BLOCKING_ADDED_EVENT", "BLOCKING_REMOVED_EVENT"):
-            self.assertIn(typename, mod.QUEUE_ISSUE_QUERY)
+        lifecycle, changes = mod.QUEUE_ISSUE_QUERY.split("dependencyChanges:")
+        self.assertIn("lifecycle: timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT])",
+                      lifecycle)
+        for enum, typename in [("BLOCKED_BY_ADDED_EVENT", "BlockedByAddedEvent"),
+                               ("BLOCKED_BY_REMOVED_EVENT", "BlockedByRemovedEvent"),
+                               ("BLOCKING_ADDED_EVENT", "BlockingAddedEvent"),
+                               ("BLOCKING_REMOVED_EVENT", "BlockingRemovedEvent")]:
+            self.assertIn(enum, changes)
+            self.assertIn(f"... on {typename} {{ createdAt }}", changes)
 
     def test_missing_ambiguous_or_contradictory_dependencies_fail_closed(self):
         self.board.add(1, body="Queue prerequisites: #9999")
