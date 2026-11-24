@@ -53,8 +53,8 @@ Each season has a distinct house, cast and scenario. Example settings: rural far
 ## Cross-season progression [CONFIRMED concept; PROPOSED implementation]
 Some skills, tools, occult knowledge or artifacts may carry over. Haunted objects can be recovered and brought to a new site to seed activity or offer specialized powers. They must remain optional and context-sensitive; horizontal variety is preferable to mandatory power creep. Artifact creation rules, inventory size, drawbacks and acquisition are OPEN.
 
-## Supernatural progression [PROPOSED]
-Manufactured horror -> early genuine manifestations -> autonomous entities and environmental influence -> potentially powerful independent haunting. These are conceptual stages, not a fixed unlock tree.
+## Supernatural progression [CONFIRMED — qualitative #23]
+Emotional intensity contributes psychic energy; belief facilitates probabilistic entity emergence; imprints shape entities; anchoring enables persistence. House-wide and localized conditions coexist. All genuine supernatural events originate from autonomous entities, whose actions do not consume energy. Contestant ghosts are possible but death is not required. No fixed unlock stages, guaranteed emergence or exact player-facing psychic meters. See [approved emergence design](issue-23-supernatural-escalation.md).
 
 ## Contestant agency [CONFIRMED]
 Contestants can form private beliefs and alliances, share or withhold information, investigate, flee, cooperate, defend themselves, and attempt to exorcise/banish or neutralize supernatural threats. Success must not depend solely on scripted scenes.
