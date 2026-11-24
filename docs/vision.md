@@ -20,6 +20,15 @@ A deceptive residential competition lures contestants into a supposedly haunted 
 - Requiring at least one surviving contestant is a favored possibility, **not yet a final rule** [PROPOSED].
 - The public-facing fate of contestants who leave, die, or disappear must be narratively credible; the mechanism is [OPEN].
 
+## House surveillance and communications [CONFIRMED — OBSERVATION BASELINE, #16]
+
+- **Complete room visibility:** Hidden cameras justify the producer's dollhouse view of **every room in the house**. This reveals observable actions and movement, **not** private thoughts, precise fear, intentions or hidden supernatural causes. Hallways/exterior coverage and possible interference have not been separately decided.
+- **House sounds:** The producer hears relevant noises such as doors opening and closing. Sound-mixing, alerts and accessibility presentation remain OPEN.
+- **Inspect-to-read speech:** People talking inside the house show **conversation bubbles**. The player **clicks a bubble** to obtain the text/details of the audible conversation; the speech text is **not automatically displayed**. What contestants say can be misleading or contradicted by their beliefs. Transcript/history and time-pausing rules remain OPEN.
+- **One house telephone:** The competition has **one shared house phone**; **cell phones are not allowed**. Telephone use likewise has a clickable bubble for text/details. The precise amount of a call that surveillance makes available (including the remote speaker), call history, and whether the ban can be evaded remain OPEN.
+
+These choices are documented in [ADR-0005](decisions/ADR-0005-house-surveillance-and-communications.md) and refine the approved [ADR-0004](decisions/ADR-0004-producer-observation-boundary.md) source-grounded observation contract: house cameras/audio are real producer-authorized sources; unseen events outside the house and private internal states are not automatically knowable. **This approves observations, not player intervention powers or specific implementation.**
+
 ## Original story seed [SOURCE MATERIAL — MECHANICS PROPOSED]
 
 The Creative Director's earlier fiction notes inspired the approved deceptive-competition premise. The following are **candidate scenario elements**, not rules authorized for implementation:
