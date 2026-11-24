@@ -15,35 +15,35 @@ The project-level `opencode.jsonc` uses ordered OpenCode V2 rules to preapprove 
 
 After pulling the config, inspect the **effective** permissions locally using `opencode debug agent build` and `opencode debug agent producer-reviewer`. Local/global policy, saved approvals and MCP-specific permission requests may influence the actual result. Noninteractive OpenCode runs still cannot solicit permission decisions through the runner. This is intentionally a scoped reduction in prompt frequency, **not** a full solution to every permission request.
 
-## Safe worktree cleanup and local Godot testing
+## Automatic worktree cleanup and local Godot testing
 
-When the runner and OpenCode are no longer actively writing, review local worktrees and running processes **before removing any worktree**. A merged PR is not proof that local uncommitted data can be discarded.
+**Default behavior:** When a supervised runner invocation finishes (success, review rejection or blocked run), the runner automatically checks **all** known agent worktrees and safely removes eligible finished ones. It reports how many were removed and why any were retained. The primary checkout, PRs, local review logs/state and repository history are never deleted. A failed cleanup is reported, not ignored.
+
+**One-time cleanup of existing worktrees** from previous runs (including the previously merged #13 and #14 prototype worktrees) needs only one command **after this PR is merged**:
 
 ```sh
 cd ~/Projects/The-Producer
-git worktree list --porcelain
-pgrep -af 'opencode|orchestrate.py' || true
-```
-
-For each candidate worktree, check `git -C /absolute/path/to/worktree status --short --branch` and confirm its associated PR is **merged or closed**, with no uncommitted/untracked files or running agent. Then remove that **specific** path from the main checkout:
-
-```sh
-git worktree remove /absolute/path/to/finished-worktree
-git worktree list
-```
-
-Never use `git worktree remove --force`, `git clean`, `git reset --hard`, or a blanket folder deletion to make cleanup succeed. A worktree with changes or active agents is a stop-and-investigate case. This removes an extra checkout, **not** the merged main-branch files or the worktree's branch. Keep `../.The-Producer-agent-runs/issue-N/` logs and state for review; deleting logs is not a safe way to unblock a duplicate runner invocation.
-
-After merged work is pulled into main, the stable way to run the 2D and 3D prototypes from the primary checkout is:
-
-```sh
 git switch main
 git pull --ff-only
+python3 tools/orchestrate.py --cleanup-worktrees
+```
+
+The cleanup command requires neither an issue number nor a model and starts **no AI agents**. It examines registered sibling worktrees matching the project's agent/issue/review naming conventions, not arbitrary directories. It removes a candidate only if:
+- No running Linux process has its working directory inside the worktree.
+- There are no uncommitted/untracked files, and no ignored files outside disposable `.godot/` cache.
+- The worktree's HEAD is proved preserved in the matching GitHub PR (legacy issue worktrees must have a **merged** PR), or a fresh agent branch has no commits beyond `origin/main`.
+- A detached review checkout has its expected commit recorded in runner state.
+
+Any unsafe or unverifiable checkout is **retained with an explicit explanation**. No `git clean`, `git reset --hard`, force-removal, or directory-level `rm` is used. Logs/state under `../.The-Producer-agent-runs/issue-N/` are intentionally retained as a durable audit trail; removing worktrees does not reset the runner's duplicate-issue protection.
+
+After pulling merged work to `main`, test from the **single stable checkout**:
+
+```sh
 godot --path "$PWD/spikes/issue-4-2d"
 godot --path "$PWD/spikes/issue-4-3d"
 ```
 
-The main checkout contains merged snapshots; you need **not** switch to an issue branch or launch from the parent directory.
+No issue branch checkout or separate Godot worktree is needed.
 
 ## Supervised runner: commands and guardrails
 
@@ -71,7 +71,7 @@ python3 tools/orchestrate.py 14 --model 'openai/YOUR-VERIFIED-MODEL#high' --appr
 
 For a real run, the script (1) requires the explicit `--approve-issue` authorization, (2) creates its own branch and sibling worktree from freshly fetched `origin/main`, (3) runs `opencode run --standalone --agent build --model ...`, (4) requires an open non-draft PR on the expected branch with `Closes #N`, a nonempty diff, an Evidence/Verification/Tests section and **Human Testing** steps for final acceptance, (5) creates a **separate detached worktree at the exact PR SHA** and runs a fresh `producer-reviewer` primary agent, and (6) allows one corrective Build pass followed by fresh review. It validates the PR head hasn't changed during review and only returns "ready for acceptance" for a single explicit `REVIEW_VERDICT: APPROVE`. The Reviewer verdict remains a technical recommendation; the human still visually accepts and merges.
 
-**Local state and cleanup:** State and text transcripts live under `../.The-Producer-agent-runs/issue-N/`, outside the Git checkout. Developer and Reviewer worktrees are sibling paths recorded in `state.json`. The first version intentionally **does not resume after interruption** or delete worktrees. If blocked, inspect `state.json`, the logs, `git worktree list`, the branch and any PR before deciding how to recover. Do not delete these records to force an unsafe duplicate run. After a successful human merge, clean up worktrees manually only after checking for uncommitted work.
+**Local state and cleanup:** State/transcripts remain under `../.The-Producer-agent-runs/issue-N/`, outside Git, while eligible worktrees are removed automatically on run exit. The runner records every Reviewer worktree and cleanup exceptions in `state.json`. Uncommitted, unpushed, in-use or unverifiable worktrees are retained and clearly reported. It does not automatically resume an interrupted run or delete audit records; see the cleanup command above.
 
 **Important limitations:** This is not a headless permission-approval mechanism. It does **not** pass `--auto`, and any OpenCode permission request that cannot be serviced from the CLI will cause a failure or timeout, leaving evidence for diagnosis. It checks an explicit `openai/...` model ID and rejects `OPENAI_API_KEY` in the shell environment, but **cannot prove which OpenAI credential/payment route the saved OpenCode account uses**; confirm ChatGPT plan access before a run. Logs can contain sensitive output and should not be shared or committed. The script checks the issue is open and has content; `--approve-issue` is the human affirmation that the issue and dependencies are approved, **not** an automated GitHub Projects Ready-field check. It does not independently interpret game acceptance criteria or execute arbitrary test suites: those remain Developer/Reviewer responsibilities, and PR evidence text alone is not proof. No autonomous backlog selection, event listening, automatic Project status writes, or PR merges.
 
