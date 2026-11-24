@@ -26,12 +26,14 @@
 | S-06 | PROPOSED | Track each contestant's actual fate and separately what is publicly known or believed. | Divergence and season-continuity scenario tests |
 | T-01 | PROPOSED | Simulation can run headlessly with seeded randomness. | Repeatability tests |
 | T-02 | PROPOSED | Debug inspector reveals hidden state only in developer/test modes. | Release-build access tests |
-| T-03 | PROPOSED | Game logic is separated from presentation and campaign persistence. | Architecture review |
+| T-03 | APPROVED (BOUNDARY PRINCIPLE) | Keep simulation/game rules, authorized observation/application data, replaceable world rendering, player UI/HUD, and campaign persistence distinct. Detailed interfaces and save formats remain open. | ADR-0002; architecture review and integration tests |
 | T-04 | PROPOSED | Core gameplay does not require paid cloud model APIs. | Offline smoke test |
-| P-01 | OPEN | Engine, language and 2D-isometric vs 3D-orthographic implementation. | Comparative prototype |
+| P-01 | APPROVED — PROVISIONAL | Godot 4 + GDScript, initially fixed-angle 3D orthographic, with 2D isometric retained as a pre-art-investment fallback; stylized/comic-like appearance and lighting to validate. | ADR-0002; native GUI and renderer-independence acceptance |
 | P-02 | OPEN | Exact persistence threshold, whether a survivor is mandatory, and season scoring/partial-success criteria. | Creative director decision |
 | P-04 | OPEN | Feasible fiction/gameplay treatment of contestant deaths, show eliminations, and missing contestants across seasons. | Narrative and systems exploration, human approval |
 | P-03 | OPEN | Initial platform(s), accessibility targets and performance budgets. | Creative director decision |
+
+**Open creative direction:** G-01 (reality-show premise) remains confirmed for now. An alternative where the show is staged or entirely fictitious to contestants is a **possible future premise revision**, not approved by ADR-0002. Contestant exits, public accounting and credible continuation into other seasons remain undecided and do not block the engine/renderer selection; they must be resolved before their dependent game/narrative implementations.
 
 ## Requirement change control
 Changes to CONFIRMED direction require human approval. PROPOSED items become approved only through a recorded decision. Every implemented issue should cite applicable IDs and include verification evidence.
