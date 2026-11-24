@@ -4,20 +4,20 @@
 
 | ID | Status | Requirement | Verification direction |
 |---|---|---|---|
-| G-01 | CONFIRMED | Player operates reality-show production concealing a haunting-creation objective. | Vision/design review |
-| G-02 | CONFIRMED | Contestants are autonomous and may voluntarily quit. | Simulation tests for decisions and exits |
+| G-01 | CONFIRMED — REVISED (#1) | Player orchestrates a deceptive residential prize competition whose concealed purpose is to create a genuine, persistent haunting; a real televised show is not required. | Approved v0.3 vision; design review |
+| G-02 | CONFIRMED | Contestants act autonomously and can decide to quit, attempt to leave/escape, investigate or resist; whether they can safely leave is not automatically guaranteed by the contest's claims. | Simulation tests for autonomous decisions and attempted exits; detailed exits OPEN |
 | G-03 | CONFIRMED | Isometric/dollhouse presentation. | Visual prototype review |
 | G-04 | CONFIRMED | Horror is primary; humor is organic tonal contrast. | Narrative/art direction review |
 | G-05 | CONFIRMED | Supernatural forces develop independent behavior that can conflict with producer goals. | Autonomous-event scenarios |
 | G-06 | CONFIRMED | Player has imperfect information about contestant attitudes, knowledge and plans. | UI/data-access tests |
 | G-07 | CONFIRMED | Contestants can avoid, investigate, defend against, banish/exorcise, and potentially neutralize supernatural entities. | Behavioral scenario tests |
-| G-08 | CONFIRMED | Seasons vary in location, cast and constraints. | Data-driven scenario tests |
+| G-08 | CONFIRMED | Distinct operations/chapters may take place at different locations with varying casts and constraints; no real TV seasons are required. | Data-driven scenario tests |
 | G-09 | CONFIRMED | Cross-season artifacts are optional, not required for successful play. | Artifact-free season feasibility tests |
 | G-10 | CONFIRMED | New seasons may inherit selected capabilities, knowledge or artifacts. | Persistence/season-transition tests |
 | G-11 | CONFIRMED | The primary season objective is to create a genuine haunting that persists after production departs. | Headless post-season persistence scenario, exact criterion TBD |
-| G-12 | CONFIRMED | Preserving the reality show's ability to plausibly continue into further seasons is a required season objective. | Season resolution checks, exact credibility model TBD |
-| G-13 | PROPOSED | At least one contestant must survive a season; survivor may be the public winner. | Scenario validation if approved |
-| G-14 | CONFIRMED | Deaths and unexplained contestant disappearances cannot be consequence-free or waved away without credible in-world accounting. | Narrative/system review of contestant outcomes |
+| G-12 | CONFIRMED — REVISED (#1) | Operating again in future locations must reckon with external exposure, contestant fates and the organization's ability to continue; TV-franchise credibility is not a requirement. Exact viability mechanics remain OPEN. | Multi-operation continuity/narrative checks once approved |
+| G-13 | OPEN | Whether a contestant must survive, win, or whether all must die is undecided; no survivor gate or mandatory death quota is approved. | Decide under #7/P-02 before scenario validation |
+| G-14 | CONFIRMED | Departures, enforced removals, deaths and unexplained disappearances have credible consequences for contestants and the wider world; no convenient universal cover-up is assumed. | Narrative/system review of contestants, witnesses and external scrutiny |
 | S-01 | PROPOSED | Contestants have private beliefs, memory, motives, relationships and observable behaviors. | State transition tests |
 | S-02 | PROPOSED | Fear and suspicion of producer wrongdoing are modeled separately. | Counterexample scenarios |
 | S-03 | PROPOSED | Supernatural entities have consistent drives and bounded agency rather than arbitrary random actions. | Seeded reproducibility and causal trace |
@@ -30,10 +30,10 @@
 | T-04 | PROPOSED | Core gameplay does not require paid cloud model APIs. | Offline smoke test |
 | P-01 | APPROVED — PROVISIONAL | Godot 4 + GDScript, initially fixed-angle 3D orthographic, with 2D isometric retained as a pre-art-investment fallback; stylized/comic-like appearance and lighting to validate. | ADR-0002; native GUI and renderer-independence acceptance |
 | P-02 | OPEN | Exact persistence threshold, whether a survivor is mandatory, and season scoring/partial-success criteria. | Creative director decision |
-| P-04 | OPEN | Feasible fiction/gameplay treatment of contestant deaths, show eliminations, and missing contestants across seasons. | Narrative and systems exploration, human approval |
+| P-04 | OPEN | Meaning of contest “removal,” quit/escape outcomes, death/disappearance accounting, town reputation and concealment of repeated deceptive operations. | Narrative and systems exploration under #7, human approval |
 | P-03 | OPEN | Initial platform(s), accessibility targets and performance budgets. | Creative director decision |
 
-**Open creative direction:** G-01 (reality-show premise) remains confirmed for now. An alternative where the show is staged or entirely fictitious to contestants is a **possible future premise revision**, not approved by ADR-0002. Contestant exits, public accounting and credible continuation into other seasons remain undecided and do not block the engine/renderer selection; they must be resolved before their dependent game/narrative implementations.
+**Approved premise revision (Creative Director, 2026-11-23 ET; Issue #1):** the contest is a deception used to attract and manipulate occupants; the player's production is the secret haunting operation, not necessarily a genuine television show. This supersedes the former TV-franchise interpretation of G-01/G-12 without altering the provisional Godot/renderer decision in ADR-0002. **Original story specifics remain proposed:** a 30-day stay, 8 PM–6 AM room confinement, $250,000 plus shared ownership, mysterious “removal,” staged townspeople, fabricated notes/diary and possible last-person outcomes. These are not implementation mandates. See `docs/vision.md` for source details. Contestant exits, whether death is necessary or universal, exact haunting-persistence threshold, and continued-operation mechanics remain OPEN.
 
 ## Requirement change control
 Changes to CONFIRMED direction require human approval. PROPOSED items become approved only through a recorded decision. Every implemented issue should cite applicable IDs and include verification evidence.
