@@ -22,7 +22,7 @@
 
 ## Priority C — Production decisions
 17. Target operating systems, distribution, accessibility and performance targets.
-18. Art direction and animation scope.
+18. **Art direction and animation scope:** reference *Darkest Dungeon* and *Cult of the Lamb* for graphic, expressive, readable horror (not copied assets). Test stylized 3D with selective shadows/ink-like edges, ordinary-to-ominous lighting contrast, zoom-scale legibility and stable outlines. Avoid both alienating photorealism and overly glib/cute horror; decide specific assets, shaders, animation, UI style and production budget under #22.
 19. Audio approach, soundtrack and voice acting.
 20. Content boundaries, rating and presentation of death/violence.
 21. Localization and modding.
