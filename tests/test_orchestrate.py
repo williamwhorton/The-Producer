@@ -129,8 +129,10 @@ class StartupIdentityTests(unittest.TestCase):
             mod.verify_checkout(child, expected_branch="agent/issue-15-test")
             with self.assertRaisesRegex(mod.Blocked, "branch mismatch"):
                 mod.verify_checkout(child, expected_branch="main")
+            nested = child / "nested"
+            nested.mkdir()
             with self.assertRaisesRegex(mod.Blocked, "checkout mismatch"):
-                mod.verify_checkout(main / "other", expected_branch="main")
+                mod.verify_checkout(nested, expected_branch="agent/issue-15-test")
             git("checkout", "--detach", cwd=child)
             mod.verify_checkout(child, expected_sha=sha)
             with self.assertRaisesRegex(mod.Blocked, "SHA mismatch"):
