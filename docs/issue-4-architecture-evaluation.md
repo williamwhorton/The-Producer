@@ -62,7 +62,7 @@ The evidence supports a *reversible initial implementation path*, **not** a clai
 
 Authoritative background: [Godot exporting projects](https://docs.godotengine.org/en/stable/tutorials/export/exporting_projects.html), [Godot saving games](https://docs.godotengine.org/en/stable/tutorials/io/saving_games.html), [Godot FileAccess](https://docs.godotengine.org/en/stable/classes/class_fileaccess.html). These document *available capabilities*, not results of tests in this project.
 
-## Reproducible inspection before the decision
+## Reproducible validation of the provisional decision
 
 From the normal main checkout (after pulling merged PRs):
 
