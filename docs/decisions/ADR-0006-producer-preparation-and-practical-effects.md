@@ -12,13 +12,25 @@ The player should have a **broad, physically plausible repertoire**, not be cons
 
 ### Three distinct action times and agency types
 
-1. **Preparation / pre-contest setup [APPROVED as category]:** The producer selects physical arrangements, props and installed devices in advance. Examples offered by the Creative Director: **squeaky floorboards**, **creepy dolls**, **remotely controlled thermostat**. **Budget is now an APPROVED constraint** on preparation, although exact prices, currency, replenishment and balance remain OPEN. Whether equipment is additionally constrained by a limited selection, availability or progression is **PROPOSED**; placement restrictions, visible clues and repositioning are OPEN.
-2. **Triggered effects during the contest [APPROVED as category]:** A producer-available prepared effect can be activated when circumstances warrant. Creative Director examples: **sound effects via hidden speakers**, **rattling windows**, **an unoccupied piano playing**, **flickering lights**; temperature changes via a prepared thermostat are also plausible. These are **examples to explore**, not a fully approved set of devices or individually specified rules. Nothing happens “by magic” simply because the player clicks a room.
-3. **Limited covert alterations during the contest [PROPOSED method, not approved mechanic]:** The producer **might be able to enter the house unseen at some point each night** to make minor physical changes. A **bloody knife appearing overnight on a table** is a potential staged-prop example. This can create evidence and uncertainty without requiring a remote-controlled device for every surprise. **Not decided:** whether entry is always possible, its timing/window, risk of discovery, where the producer can go, how alterations are constrained, whether crew/agents can substitute, or whether time must elapse. Do not assume guaranteed safe night access or a nightly free-action allowance.
+1. **Preparation / pre-contest setup [APPROVED as category]:** The producer has **unlimited setup/planning time before contestants arrive**; there is no setup countdown. The producer chooses physical arrangements, props and devices in advance. **Structural or complex installation, such as deliberately squeaky floorboards, belongs to this phase only**, not the running contest. Untimed setup is **still budget-limited**. Examples offered by the Creative Director: **squeaky floorboards**, **creepy dolls**, **remotely controlled thermostat**. **Budget is now an APPROVED constraint** on preparation, although exact prices, currency, replenishment and balance remain OPEN. Whether equipment is additionally constrained by a limited selection, availability or progression is **PROPOSED**; placement restrictions, visible clues and repositioning are OPEN.
+2. **Triggered effects during the contest [APPROVED as category]:** Previously installed or prepared effects can be activated while play is underway, when circumstances warrant. Triggering an effect does **not** install a new device or perform structural work. Creative Director examples: **sound effects via hidden speakers**, **rattling windows**, **an unoccupied piano playing**, **flickering lights**; temperature changes via a prepared thermostat are also plausible. These are **examples to explore**, not a fully approved set of devices or individually specified rules. Nothing happens “by magic” simply because the player clicks a room.
+3. **Small alterations during play [APPROVED category; nightly limit and access PROPOSED]:** The producer can stage **minor, quick, nonstructural, prank-like changes** while the contest is running, such as a **bloody knife appearing on a table overnight** or a moved prop. Changes in this category should be plausibly achievable quickly by **one person**, not require structural renovation or complicated equipment installation. **PROPOSED:** each night, allow the player to choose only a **limited number** of interventions from this class. Whether the producer actually enters unseen, someone else carries out the change, when access is possible, the per-night quota and discovery risks are **OPEN**; neither safe nightly entry nor a numeric quota has been approved.
 
 **Further candidate:** a **holographic/projection-based ghost** may be a manufactured visual effect if a plausible installation/setup and appropriate visual scope are eventually approved. It is **PROPOSED**, not a core mechanic, guaranteed technology, real ghost, or justification for unbounded on-demand apparitions.
 
 **Crucial distinction:** player-operated practical effects are **different from autonomous supernatural phenomena**. Paranormal entities and manifestations may eventually operate independently or disobey the producer (G-05). Do not model every genuine manifestation as a remotely commanded practical-effect device.
+
+## Three phases and their limits [CONFIRMED direction; nightly quota PROPOSED]
+
+| Phase | What the player does | Example | Limits |
+| --- | --- | --- | --- |
+| **Before start** | Prepare and alter house; select equipment; complete structural work at leisure | Make floorboards squeak, install speakers/thermostats | **No time limit [CONFIRMED]**; **budget-limited [CONFIRMED]**; gear availability only PROPOSED |
+| **During contest (live)** | Choose **when** to activate a previously installed or prepared effect | Play sound, rattle windows, flicker controllable lights | Prepared mechanism needed; exact uses, costs and cooldowns OPEN |
+| **During contest (small alteration, possibly nightly)** | Select a quick, nonstructural change, staged for occupants to discover | Move a doll, place a bloody-looking prop on a table | **Nonstructural/solo-quick scope [CONFIRMED direction]**; **limited picks each night [PROPOSED]**; access, timing and detection OPEN |
+
+The initial phase **has no player time pressure**, but is not unlimited in money or kit. Once contestants arrive, floorboards and complex devices cannot simply be installed as a minor nighttime prank. These alterations form a distinct action type from remote activation of an effect.
+
+**Recommendation [PROPOSED]:** present the overnight options as a small set of meaningful choices, possibly with a per-night allowance, rather than requiring intricate character-stealth gameplay. Do not assume an invisible crew, guaranteed access, specific curfew/sleep hours or risk-free staging without further approval (#16/#17/#7).
 
 ## Alternative initial action designs (not chosen as complete gameplay rules)
 
@@ -39,7 +51,7 @@ Player individually assembles motors, cables, props, speakers, actuators, power 
 
 ### C. Prepared capabilities + context-appropriate effect actions (**RECOMMENDED for first design/prototype**)
 
-Before the contest, select a **small number of physically plausible house preparations**; during the contest, trigger effects that those preparations authorize. If a later **covert alteration** method is approved, add a separate action category with distinct fiction and consequences. The simulation decides what contestants notice, believe and do; the player does **not** directly set their emotional state or supernatural entity actions.
+Before the contest, select a **small number of physically plausible house preparations**; during the contest, trigger effects that those preparations authorize. Keep the quick, nonstructural alteration category **separate** from prepared effect triggers. How those changes are staged and whether a per-night selection limit exists remain to be decided. The simulation decides what contestants notice, believe and do; the player does **not** directly set their emotional state or supernatural entity actions.
 
 - **Pros:** grounded fiction and meaningful setup; game-design room to expand effects without exhaustive item lists or simulating wiring; prepares genuine producer-versus-contestant interplay.
 - **Costs:** needs a lightweight capability/location model and explanation of why an intervention is possible. Trigger frequency, setup timing, discovery and resource costs must be balanced later.
@@ -69,7 +81,7 @@ The central failure mode to avoid is turning early levels into “you needed a b
 ## A minimal possible conceptual flow (for later #16 selection)
 
 ```text
-[Pre-contest access]
+[Untimed pre-contest planning, constrained by budget]
    -> select plausible house preparations
    -> scenario capabilities (room/device/prop; exact model open)
 [Producer observes through approved hidden surveillance]
@@ -78,12 +90,14 @@ The central failure mode to avoid is turning early levels into “you needed a b
    -> effect occurs in world simulation
    -> contestants notice or miss it and react autonomously
    -> effect/evidence may be investigated and interpreted
+[Separate minor nonstructural changes during play; nightly quota PROPOSED]
+   -> potential staged discovery of quick prop changes
 [Later: independent supernatural forces may manifest, not as direct player commands]
 ```
 
 **Example:** If an appropriate hidden sound setup is approved and installed in a room, the player could trigger a disturbing sound there. A contestant might flee, investigate the apparent source, ignore it, or persuade others that it was staged. The producer's selected **effect** is direct control; a contestant's **reaction/belief** is not.
 
-**Overnight alteration example [PROPOSED ONLY]:** a staged object is discovered the next morning after a covert change. How the alteration is performed and what makes it possible or risky remain open.
+**Overnight alteration example [CONFIRMED as minor-change category; execution PROPOSED]:** a small staged object is discovered the next morning. The **number of changes allowed each night**, the mechanics of gaining access and risk of discovery remain open.
 
 ## Boundaries and future tests
 
@@ -91,15 +105,15 @@ The central failure mode to avoid is turning early levels into “you needed a b
 - Preparations affect available choices but **do not** automatically command contestants; decision tests should demonstrate multiple plausible reactions.
 - Contestants can notice a physical sign of staging and interpret it. Exact evidence, detection thresholds and consequences are open.
 - The producer cannot invent unobserved inner state from an intervention result. **Observation remains routed through ADR-0004 and ADR-0005**; the approved house surveillance can show visible changes without revealing the cause to contestants or their internal conclusions.
-- Any later covert entry/prop placement needs an approved route, timing and risk model; **none is authorized merely by this ADR**.
+- Quick nonstructural staging is a **confirmed intervention category**, but no guaranteed nightly house entry, specific number of picks or undetectable execution is approved. Structural/setup work cannot be treated as a quick alteration.
 - **Budget as a preparation constraint and timing as the principal early/lower-difficulty challenge are approved design directions**, but exact costs, gear restrictions, severity, cooldowns, difficulty scaling, initial effects, asset fidelity, implementation, scenario generation, time controls and player tool UX are NOT approved. No implementation test was executed for this design decision.
 
 ## Decisions still needed in #16
 
 1. Select the **first tiny action vocabulary** for a vertical slice: what prepared features and triggered interventions make the essential observe → stage → react → adapt loop legible?
-2. Is **covert nightly entry** an actual player tool? If so, who enters, what can change, when, and with what consequences?
+2. **Quick nonstructural changes during play are a confirmed category.** Is covert nightly entry how they occur, or are they delegated/abstracted? **PROPOSED:** a limited selection of such changes each night. Exact number, physical access, timing and consequences remain OPEN.
 3. **Budget limits setup [CONFIRMED]**; choose a simple budget model and numeric costs later. Decide whether **equipment stock/loadouts are constrained [PROPOSED]**, and what room/device limits, suspicion, access, cooldowns and feasibility/availability UI are necessary. **Keep early/lower-difficulty balance timing-first [CONFIRMED direction].**
 4. May contestants discover/disarm/counter staged effects, and how should this affect continuing operations?
 5. How should sound/lighting/effect controls interact with player focus, live dialogue, the proposed house timetable and real supernatural autonomy?
 
-**Recorded scope:** The Creative Director approved the **physical-plausibility and pre-contest preparation direction**, **budget-limited setup**, and **timing-first challenge at early/lower difficulties**, supplying *Orcs Must Die!* as a structural reference. **Equipment availability limits remain a possibility**, not a confirmed rule. The Director supplied example effects and suggested (but did not yet finalize) **covert nighttime changes** and **holographic ghosts**. The specific catalogue of interventions is **deliberately non-exhaustive**. Issue #16 remains **OPEN/In Progress**; no producer gameplay system or detailed mechanic is authorized by this documentation.
+**Recorded scope:** The Creative Director approved **untimed, budget-limited pre-contest preparation**, **timing-first challenge at early/lower difficulties**, and the separate category of **quick nonstructural changes during play**, supplying *Orcs Must Die!* as a structural reference. **Equipment availability limits remain a possibility**, not a confirmed rule. The Director supplied examples and proposed (but did not finalize) **a limited number of overnight minor interventions**, **covert entry details** and **holographic ghosts**. The specific catalogue of interventions is **deliberately non-exhaustive**. Issue #16 remains **OPEN/In Progress**; no producer gameplay system or detailed mechanic is authorized by this documentation.
