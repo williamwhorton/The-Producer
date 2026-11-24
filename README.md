@@ -22,6 +22,8 @@ The [MVP-to-release delivery plan](docs/mvp-delivery-plan.md) maps GitHub issues
 - [Seasons and artifacts](docs/systems/seasons-and-artifacts.md)
 - [Season outcomes and continuity](docs/systems/season-outcomes-and-continuity.md)
 - [Technical architecture constraints](docs/technical-architecture.md)
+- [Issue #4 engine/rendering comparison](docs/issue-4-architecture-evaluation.md) — proposed recommendation, not approved
+- [ADR-0002 engine/presentation proposal](docs/decisions/ADR-0002-engine-and-presentation-approach.md) — pending Creative Director decision
 - [Roadmap](docs/roadmap.md)
 - [Issue types, field visibility and priority conventions](docs/project-board-setup.md)
 - [Open decisions](docs/open-questions.md)
