@@ -4,7 +4,7 @@
 
 ## Preferred boundaries
 - **Simulation domain:** contestants, relationships, beliefs, movement, supernatural entities, producer interventions and deterministic event scheduling.
-- **Observation boundary:** transforms actual world events into production-observable evidence and estimates. Never bypass it for player UI.
+- **Observation boundary:** transforms actual world events into production-observable evidence and estimates. Never bypass it for player UI. **Approved #16/ADR-0005 baseline:** the producer's hidden surveillance provides visual coverage of every house room; door/environment sounds and bubble-inspected in-house dialogue are authorized observational channels. One house telephone exists and contestants are prohibited cell phones. Only captured speech/call portions may pass into the UI; no private thought or unmonitored off-site knowledge leaks.
 - **World presentation:** fixed-angle 3D orthographic dollhouse as the provisional renderer; camera, mesh, lighting, floor cutaway, selection and visual effects stay renderer-specific, behind a small replaceable presentation interface (2D fallback retained).
 - **UI / producer tools:** HUD, accessible controls and workflow are distinct from the world renderer and domain logic; consume approved observations, stable IDs and application actions, never private world internals or renderer node references for game decisions.
 - **Campaign/persistence:** scenario definitions, season outcomes, operation-continuity and external-exposure state, contestant disposition, artifact provenance, unlocks and save/load.
