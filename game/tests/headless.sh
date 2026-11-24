@@ -25,3 +25,4 @@ check() {
 check --editor --import
 check --quit-after 2
 check --script res://tests/smoke.gd
+check --script res://tests/scheduler.gd
