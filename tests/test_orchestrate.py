@@ -1,6 +1,9 @@
 import argparse
 import importlib.util
+import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import sys
 import unittest
@@ -92,6 +95,84 @@ class ParserTests(unittest.TestCase):
                     mod.issue_details(14, Path('/tmp'))
 
 
+
+class StartupIdentityTests(unittest.TestCase):
+    def test_agent_subprocess_replaces_stale_inherited_pwd(self):
+        with tempfile.TemporaryDirectory() as temp:
+            child = Path(temp) / "target-worktree"
+            child.mkdir()
+            log = Path(temp) / "agent.log"
+            script = ("import json, os; "
+                      "print(json.dumps({'cwd': os.getcwd(), 'PWD': os.environ.get('PWD')}))")
+            with patch.dict(os.environ, {"PWD": str(Path(temp) / "main")}):
+                transcript = mod.run_agent([sys.executable, "-c", script], child, log, 10)
+            result = json.loads(transcript.strip())
+            self.assertEqual(result, {"cwd": str(child), "PWD": str(child)})
+            self.assertEqual(os.environ.get("PWD") == str(child), False)
+
+    def test_checkout_gate_rejects_main_and_accepts_worktree(self):
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "main"
+            child = Path(temp) / "issue-worktree"
+            main.mkdir()
+            def git(*args, cwd=main):
+                return subprocess.run(["git", *args], cwd=cwd, text=True,
+                                      capture_output=True, check=True).stdout.strip()
+            git("init", "-b", "main")
+            git("config", "user.name", "Unit Test")
+            git("config", "user.email", "test@example.invalid")
+            (main / "README.md").write_text("fixture\n")
+            git("add", "README.md")
+            git("commit", "-m", "base")
+            git("worktree", "add", "-b", "agent/issue-15-test", str(child))
+            sha = git("rev-parse", "HEAD", cwd=child)
+            mod.verify_checkout(child, expected_branch="agent/issue-15-test")
+            with self.assertRaisesRegex(mod.Blocked, "branch mismatch"):
+                mod.verify_checkout(child, expected_branch="main")
+            with self.assertRaisesRegex(mod.Blocked, "checkout mismatch"):
+                mod.verify_checkout(main / "other", expected_branch="main")
+            git("checkout", "--detach", cwd=child)
+            mod.verify_checkout(child, expected_sha=sha)
+            with self.assertRaisesRegex(mod.Blocked, "SHA mismatch"):
+                mod.verify_checkout(child, expected_sha="b" * 40)
+            with self.assertRaisesRegex(mod.Blocked, "must be detached"):
+                mod.verify_checkout(main, expected_sha=sha)
+
+    def test_archive_blocked_run_preserves_logs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "The-Producer"
+            main.mkdir()
+            state_dir = main.parent / ".The-Producer-agent-runs" / "issue-15"
+            state_dir.mkdir(parents=True)
+            (state_dir / "state.json").write_text(json.dumps(
+                {"issue": 15, "phase": "blocked", "development_worktree": str(main.parent / "old")}))
+            (state_dir / "developer-0.log").write_text("old failure evidence")
+            with patch.object(mod, "cleanup_worktrees", return_value=(0, [])), \
+                 patch.object(mod, "registered_worktrees", return_value=[]):
+                history = mod.archive_blocked_run(main, 15, state_dir)
+            self.assertFalse(state_dir.exists())
+            self.assertTrue(history.name.startswith("issue-15-history-"))
+            self.assertEqual((history / "developer-0.log").read_text(), "old failure evidence")
+
+    def test_archive_rejects_unverified_or_active_previous_run(self):
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "The-Producer"
+            main.mkdir()
+            state_dir = main.parent / ".The-Producer-agent-runs" / "issue-15"
+            state_dir.mkdir(parents=True)
+            (state_dir / "state.json").write_text(json.dumps(
+                {"issue": 15, "phase": "blocked", "pr": "https://github.com/example/pull/1"}))
+            with self.assertRaisesRegex(mod.Blocked, "no PR"):
+                mod.archive_blocked_run(main, 15, state_dir)
+            (state_dir / "state.json").write_text(json.dumps(
+                {"issue": 15, "phase": "blocked"}))
+            with patch.object(mod, "cleanup_worktrees",
+                              return_value=(0, ["worktree busy"])):
+                with self.assertRaisesRegex(mod.Blocked, "could not be cleaned"):
+                    mod.archive_blocked_run(main, 15, state_dir)
+            self.assertTrue(state_dir.exists())
+
+
 class FlowTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -99,7 +180,8 @@ class FlowTests(unittest.TestCase):
         self.repo = Path(self.tmp.name) / 'The-Producer'
         self.repo.mkdir()
         self.args = argparse.Namespace(issue=14, repo=str(self.repo), model='openai/gpt-test#high',
-                                       dry_run=False, approve_issue=True, timeout_minutes=2)
+                                       dry_run=False, approve_issue=True, retry_blocked=False,
+                                       timeout_minutes=2)
         self.issue = {'number': 14, 'title': '3D prototype', 'url': 'https://github.com/williamwhorton/The-Producer/issues/14',
                       'state': 'OPEN', 'body': 'acceptance criteria'}
 
@@ -132,8 +214,10 @@ class FlowTests(unittest.TestCase):
         with patch.object(mod, 'preflight', return_value=self.issue), \
              patch.object(mod, 'run_cmd', side_effect=cmd), \
              patch.object(mod, 'pr_details', side_effect=pr), \
+             patch.object(mod, 'verify_checkout') as verify, \
              patch.object(mod, 'run_agent', side_effect=agent):
             self.assertEqual(mod.orchestrate(self.args), 0)
+            self.assertEqual(verify.call_count, 3)
         state = self.repo.parent / '.The-Producer-agent-runs/issue-14/state.json'
         self.assertIn('ready_for_human_acceptance', state.read_text())
         agents = [c for c in calls if c[0] == 'agent']
@@ -164,6 +248,7 @@ class FlowTests(unittest.TestCase):
         with patch.object(mod, 'preflight', return_value=self.issue), \
              patch.object(mod, 'run_cmd', side_effect=cmd), \
              patch.object(mod, 'pr_details', side_effect=pr), \
+             patch.object(mod, 'verify_checkout'), \
              patch.object(mod, 'run_agent', side_effect=agent):
             with self.assertRaisesRegex(mod.Blocked, 'still requests changes'):
                 mod.orchestrate(self.args)
