@@ -175,6 +175,22 @@ class StartupIdentityTests(unittest.TestCase):
             self.assertTrue(state_dir.exists())
 
 
+    def test_archive_refuses_previous_branch_with_pr_even_without_closes_reference(self):
+        with tempfile.TemporaryDirectory() as temp:
+            main = Path(temp) / "The-Producer"
+            main.mkdir()
+            state = main.parent / ".The-Producer-agent-runs" / "issue-15"
+            state.mkdir(parents=True)
+            (state / "state.json").write_text(json.dumps({
+                "issue": 15, "phase": "blocked", "branch": "agent/issue-15-old"}))
+            with patch.object(mod, "json_cmd", return_value=[{"number": 75}]), \
+                 patch.object(mod, "cleanup_worktrees") as cleanup:
+                with self.assertRaisesRegex(mod.Blocked, "Previous branch has"):
+                    mod.archive_blocked_run(main, 15, state)
+            cleanup.assert_not_called()
+            self.assertTrue(state.exists())
+
+
 class FlowTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
