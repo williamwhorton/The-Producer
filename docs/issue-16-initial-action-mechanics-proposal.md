@@ -86,9 +86,10 @@ The original P1–P4 are still **candidate actions**, not approved or replaced. 
 Producer Action or Prepared Passive Trigger
     -> Validate physical means, phase, location and slot/budget rules
     -> Create concrete WorldEvent(kind, location, time, cue tags, actor/source)
-    -> Each contestant independently PERCEIVES or MISSES the event
-    -> If chronic, track ongoing exposure and recovery; if acute, record witnessed shock
-    -> If perceived/experienced, appraise via context, personal relevance and cue familiarity
+    -> For sustained conditions, evaluate individual exposure and recovery over time
+    -> For perceptible cues, each contestant independently NOTICES or MISSES them
+    -> Appraise observed events via context, personal relevance and cue familiarity
+       (physical discomfort can persist even after cues cease to be surprising)
     -> Candidate private effects on baseline stress, momentary startle, haunting belief,
        staging suspicion, persistent memory (specific dimensions NOT APPROVED)
     -> Contestant's own goals/needs/relationships drive next actions
