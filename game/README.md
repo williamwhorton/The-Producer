@@ -18,8 +18,9 @@ godot --path game
 ```
 
 1. The window opens to **The Producer / HOUSE PREVIEW**, with a furnished
-   parlor and study visible together from a fixed elevated angle. The footer
-   reads **No room selected**.
+   parlor and study visible together from a fixed elevated angle. Look for
+   the gap in the dividing wall and the marked **EXIT** in the near study wall.
+   The footer reads **No room selected**.
 2. Left-click the exposed greenish floor in the parlor by the sofa. Only that
    floor turns gold and the footer reads **Parlor**.
 3. Left-click the exposed tan floor in the study by the desk. Only the study
@@ -31,21 +32,34 @@ godot --path game
 `res://main.tscn` is the configured entry point. No prior editor import,
 asset downloads, plugins, or runtime services are needed.
 
+### Static navigation preview (#29)
+
+```sh
+godot --path game -- --show-navigation
+```
+
+Follow the cyan line from near the front of the parlor. It turns through the
+only opening in the dividing wall, avoids the furnishings, and ends inside
+the marked study exit. Click the line just inside the study: the study floor
+and HUD selection work as usual. The ordinary launch shows both openings
+without the line. This is a fixed route example, not an actor's intent or a
+player movement control. See the [authored layout](simulation/README.md#house-layout-and-routing-29).
+
 ## Boundaries
 
 | Path | Responsibility in this slice |
 | --- | --- |
-| `main.tscn`, `main.gd` | Compose the world view and HUD. Map the renderer's selected room ID through the application boundary and pass only its display name to the HUD. |
-| `observation/` | Public information from the static, producer-known floor plan. The lookup returns a display name or no label; it neither receives private state nor grants access to additional information. Future live evidence must follow [ADR-0004](../docs/decisions/ADR-0004-producer-observation-boundary.md). |
+| `main.tscn`, `main.gd` | Compose the world view and HUD, pass the projected floor plan to the renderer and translate room selection to a HUD label. |
+| `observation/` | Project the producer-known floor plan, room labels and optional static route example, with no private state. Future live evidence must follow [ADR-0004](../docs/decisions/ADR-0004-producer-observation-boundary.md). |
 | `world/` | Preview geometry, camera, lighting, cutaway, picking and floor highlight. The adapter emits a room ID, not a collider or 3D position. |
 | `ui/` | Title, room label and controls hint; no world or domain script dependency. |
-| `simulation/` | [Private seeded scheduler and clock](simulation/README.md) (#28). The static house preview does not run a contest simulation. |
+| `simulation/` | [Private seeded scheduler and clock, authored house topology and routing](simulation/README.md). The static preview does not run a contest simulation. |
 | `persistence/` | Reserved for save/load and campaign state. No save API, format or storage is chosen or used. |
 
 The preview uses local Godot scenes/scripts only: a headless boot path (T-01
 foundation, not a deterministic simulation), separated modules (T-03), no
 runtime network or paid API dependency (T-04), and a 3D dollhouse view (G-03).
-No gameplay, actor movement, camera controls, or multi-floor behavior is added.
+No departure rules, actor control, or floor transitions are implemented.
 
 ## Smoke checks
 
@@ -65,20 +79,24 @@ Godot error in the logs. It runs these commands in order:
 godot --headless --path game --editor --import
 godot --headless --path game --quit-after 2
 godot --headless --path game --script res://tests/smoke.gd
+godot --headless --path game --script res://tests/smoke.gd -- --show-navigation
 godot --headless --path game --script res://tests/scheduler.gd
+godot --headless --path game --script res://tests/house_navigation.gd
 ```
 
 The first two commands should exit successfully without script/scene errors.
 The smoke test loads the configured main scene and checks the active orthographic
-camera, initial HUD, both floor picks, desk occlusion, background clearing and
-unknown room IDs. Expect exit 0 and
-`PASS: configured main scene, orthographic camera, room picking, and HUD`.
+camera, room picking, desk occlusion, background clearing, both openings and their
+adjacent wall segments, and the opt-in route. Expect exit 0 and
+`PASS: configured main scene, room picking, doorway, exit, and route overlay`.
 The scheduler test runs separately from the scene; expect exit 0 and
 `PASS: seeded scheduler ordering, tactical pause, live triggers, and speed invariance`.
+The scene-free navigation test expects exit 0 and
+`PASS: house cells, doorway constraints, shortest routes, and exit threshold`.
 The disposable `spikes/` are not used as substitutes. Headless checks do not
 verify rendered output.
-To repeat the automated checks with graphics enabled, run
-`godot --path game --script res://tests/smoke.gd`.
+To repeat the scene smoke test with graphics enabled and the route visible, run
+`godot --path game --script res://tests/smoke.gd -- --show-navigation`.
 
 ## Recorded evidence for the #27 preview
 
