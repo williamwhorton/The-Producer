@@ -246,8 +246,9 @@ def write_state(path: Path, **fields: object) -> None:
     tmp.replace(path)
 
 
-def review_prompt(issue: int, pr: dict) -> str:
-    return (f"Independently review PR #{pr['number']} for Issue #{issue} at exact "
+def review_prompt(issue: int, pr: dict, worktree: Path) -> str:
+    return (f"Independently review PR #{pr['number']} for Issue #{issue} in "
+            f"worktree {worktree.resolve()} at exact "
             f"commit {pr['headRefOid']} in {REPOSITORY}. BEFORE reviewing, verify "
             "the tool's pwd and Git worktree root match your assigned current "
             "directory, that HEAD is detached at the exact commit, and do not "
@@ -263,8 +264,9 @@ def review_prompt(issue: int, pr: dict) -> str:
             "Provide evidence before the verdict line.")
 
 
-def developer_prompt(issue: int, branch: str) -> str:
-    return (f"Implement GitHub Issue #{issue} in {REPOSITORY} following AGENTS.md "
+def developer_prompt(issue: int, branch: str, worktree: Path) -> str:
+    return (f"Implement GitHub Issue #{issue} in {REPOSITORY}, worktree "
+            f"{worktree.resolve()}, following AGENTS.md "
             "and docs/agent-workflow.md. You are already in an isolated worktree "
             f"on branch '{branch}' based on origin/main; preserve it. BEFORE doing "
             "any work, run 'pwd', 'git rev-parse --show-toplevel' and "
@@ -288,6 +290,8 @@ def correction_prompt(issue: int, pr: dict, review_text: str) -> str:
             "rerun appropriate tests, update the existing branch and PR evidence, "
             "and do not merge. Preserve or update the PR's ## Human Testing "
             "steps with accurate commands and expected results. "
+            "Before edits, independently verify pwd, Git worktree root, and "
+            "current branch match the assigned issue worktree; stop if not. "
             "If findings are incorrect, document concrete proof.\n\n"
             f"Independent review:\n{review_text[-18000:]}")
 
@@ -526,7 +530,7 @@ def orchestrate(args: argparse.Namespace) -> int:
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
         verify_checkout(dev, expected_branch=branch)
-        prompt = developer_prompt(issue, branch)
+        prompt = developer_prompt(issue, branch, dev)
         run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
                    prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
         verify_checkout(dev, expected_branch=branch)
@@ -550,7 +554,7 @@ def orchestrate(args: argparse.Namespace) -> int:
             verify_checkout(review, expected_sha=actual_sha)
             review_text = run_agent(["opencode", "run", "--standalone", "--agent",
                                      "producer-reviewer", "--model", model,
-                                     review_prompt(issue, pr)], review,
+                                     review_prompt(issue, pr, review)], review,
                                     state_dir / f"review-{attempt}.log",
                                     args.timeout_minutes * 60)
             verdict = review_verdict(review_text)
