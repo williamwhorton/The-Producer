@@ -139,6 +139,43 @@ def review_verdict(log: str) -> str:
     return matches[0]
 
 
+def verify_checkout(cwd: Path, *, expected_branch: str | None = None,
+                    expected_sha: str | None = None) -> None:
+    """Fail closed before an agent starts on an unintended checkout.
+
+    Git's actual worktree root/branch are authoritative, not a parent session,
+    the Git common directory, the project label or the LLM's own claims.
+    """
+    cwd = cwd.resolve()
+    actual_root = Path(run_cmd(["git", "rev-parse", "--show-toplevel"], cwd)).resolve()
+    if actual_root != cwd:
+        raise Blocked(f"Agent checkout mismatch: expected {cwd}, Git reports {actual_root}.")
+    actual_branch = run_cmd(["git", "branch", "--show-current"], cwd)
+    if expected_branch is not None and actual_branch != expected_branch:
+        raise Blocked(f"Agent branch mismatch in {cwd}: expected {expected_branch!r}, "
+                      f"got {actual_branch!r}.")
+    if expected_sha is not None:
+        if actual_branch:
+            raise Blocked(f"Reviewer must be detached at {expected_sha}; "
+                          f"found branch {actual_branch!r} in {cwd}.")
+        actual_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd)
+        if actual_sha != expected_sha:
+            raise Blocked(f"Reviewer SHA mismatch in {cwd}: expected {expected_sha}, "
+                          f"got {actual_sha}.")
+
+
+def agent_environment(cwd: Path) -> dict[str, str]:
+    """Keep process cwd and PWD consistent when launching OpenCode.
+
+    Some OpenCode run versions prefer inherited PWD over the child process cwd.
+    Python's Popen(cwd=...) does not rewrite PWD; without this, a process
+    started in the main checkout may bind its session back to main.
+    """
+    env = os.environ.copy()
+    env["PWD"] = str(cwd.resolve())
+    return env
+
+
 def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
     """Run a fresh CLI session, stream its output, and bound its process group.
 
@@ -146,13 +183,14 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
     An OpenCode permission interaction unavailable in CLI mode will time out and
     block the run, rather than receiving an unsafe '--auto' override.
     """
+    cwd = cwd.resolve()
     agent_name = argv[argv.index("--agent") + 1] if "--agent" in argv else argv[0]
     print(f"Starting {agent_name} in {cwd}. Transcript: {log_path}", flush=True)
     with log_path.open("wb") as log:
         try:
-            process = subprocess.Popen(argv, cwd=cwd, stdin=None,
-                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                       start_new_session=True)
+            process = subprocess.Popen(argv, cwd=cwd, env=agent_environment(cwd),
+                                       stdin=None, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
         except OSError as exc:
             raise Blocked(f"Cannot start OpenCode: {exc}") from exc
         def stream() -> None:
@@ -210,7 +248,11 @@ def write_state(path: Path, **fields: object) -> None:
 
 def review_prompt(issue: int, pr: dict) -> str:
     return (f"Independently review PR #{pr['number']} for Issue #{issue} at exact "
-            f"commit {pr['headRefOid']} in {REPOSITORY}. Read AGENTS.md, the issue "
+            f"commit {pr['headRefOid']} in {REPOSITORY}. BEFORE reviewing, verify "
+            "the tool's pwd and Git worktree root match your assigned current "
+            "directory, that HEAD is detached at the exact commit, and do not "
+            "switch to the main checkout. If mismatched, stop with "
+            "REVIEW_VERDICT: UNABLE_TO_VERIFY. Read AGENTS.md, the issue "
             "and authoritative parent requirements; inspect actual code and diff, "
             "reproduce appropriate tests and visual checks where possible. "
             "This is a read-only review; do not edit files, commits, or GitHub state. "
@@ -224,7 +266,10 @@ def review_prompt(issue: int, pr: dict) -> str:
 def developer_prompt(issue: int, branch: str) -> str:
     return (f"Implement GitHub Issue #{issue} in {REPOSITORY} following AGENTS.md "
             "and docs/agent-workflow.md. You are already in an isolated worktree "
-            f"on branch '{branch}' based on origin/main; preserve it. Verify the "
+            f"on branch '{branch}' based on origin/main; preserve it. BEFORE doing "
+            "any work, run 'pwd', 'git rev-parse --show-toplevel' and "
+            "'git branch --show-current'. If the worktree or branch is not "
+            "this exact assigned worktree/branch, STOP without edits. Verify the "
             "actual issue, all authoritative parent fixtures, and approval scope. "
             "Implement, execute real tests and GUI inspection where available, "
             "document actual evidence, push this branch and open one non-draft PR "
@@ -439,9 +484,11 @@ def orchestrate(args: argparse.Namespace) -> int:
         run_cmd(["git", "worktree", "add", "-b", branch, str(dev),
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
+        verify_checkout(dev, expected_branch=branch)
         prompt = developer_prompt(issue, branch)
         run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
                    prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
+        verify_checkout(dev, expected_branch=branch)
         pr = pr_details(branch, issue, repo)
         write_state(state_file, phase="reviewing", pr=pr["url"], head_sha=pr["headRefOid"])
         for attempt in range(2):
@@ -459,6 +506,7 @@ def orchestrate(args: argparse.Namespace) -> int:
             write_state(state_file, phase="reviewing", review_worktree=str(review),
                         review_worktrees=history, review_attempt=attempt,
                         head_sha=actual_sha)
+            verify_checkout(review, expected_sha=actual_sha)
             review_text = run_agent(["opencode", "run", "--standalone", "--agent",
                                      "producer-reviewer", "--model", model,
                                      review_prompt(issue, pr)], review,
@@ -481,9 +529,11 @@ def orchestrate(args: argparse.Namespace) -> int:
             if attempt:
                 raise Blocked("Independent review still requests changes after one correction cycle.")
             write_state(state_file, phase="correcting")
+            verify_checkout(dev, expected_branch=branch)
             run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
                        model, correction_prompt(issue, pr, review_text)], dev,
                       state_dir / "developer-1.log", args.timeout_minutes * 60)
+            verify_checkout(dev, expected_branch=branch)
             updated = pr_details(branch, issue, repo)
             if updated["number"] != pr["number"] or updated["headRefOid"] == pr["headRefOid"]:
                 raise Blocked("Correction did not update the same PR with a new commit.")
