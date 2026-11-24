@@ -5,13 +5,15 @@
 ## Goals [CONFIRMED]
 Contestants act independently and can infer, investigate, collaborate, conceal information, flee, resist and confront supernatural threats. The producer cannot read their minds.
 
-## Cast-specific personal triggers and producer background [CONFIRMED direction; sourcing OPEN]
+## Brief researched dossiers and optional personal vulnerabilities [CONFIRMED]
 
-Each contestant has **at least one meaningful fear or personal history/association** connected to an object, person, memory or idea. **Available overnight minor-intervention options are derived from those personalized hooks** (e.g., a doll-phobic contestant can be targeted with a doll; someone with a deceased relative may encounter that person's photograph). An option must still be a physically plausible quick nonstructural stage change.
+The producer has **already selected and researched the contestants**. Every contestant has a compact, producer-facing **baseball-card-style dossier** containing a **photo, age, sex, occupation and an extremely brief background**. It mentions a **known exploitable phobia, emotionally significant event or personal association when applicable**. **Some contestants have no known exploitable vulnerability**; their dossiers remain valid. Identifying names are a practical UI detail; no large set of numerical psychology meters is required.
 
-**Producer-facing context must come from a legitimate source.** Casting interviews, vetting or background research could explain knowledge of some historical or personal facts, but the exact source, completeness and dossier/UI are OPEN. Showing a background fact to the producer is **not** the same as showing raw current fear, memories, beliefs or plans from `PrivateContestantState`. ADR-0004 still requires allowlisted source-grounded player views.
+**Authorized source:** the dossier records **producer-gathered pre-contest biographical research**. Those known facts can be exposed to the player without revealing the contestant's **private current fear/stress, intentions, plans, beliefs or internal memory state** from `PrivateContestantState`. ADR-0004's allowlisted, source-mediated observation boundary continues to govern the ongoing house. Completeness/accuracy of dossiers beyond the brief furnished background remains OPEN.
 
-Targeting a contestant's known trigger does **not** automatically dictate their action or emotional state. The harder **guaranteed significant consequence** for each offered option remains PROPOSED under A-11; the personal association is now CONFIRMED as the source of candidate interventions (A-12).
+**Intervention eligibility:** personalized overnight options arise from **known dossier hooks where present** (e.g., a doll for someone afraid of dolls; a deceased relative's photograph for someone affected by that loss). **Do not fabricate a hook for every contestant** or require a special nightly action for those without one. Any chosen change must remain quick and nonstructural, using one of the fixed nightly slots and staged unseen. Reactions remain autonomous. Guaranteed significant impact of an *offered* option is still PROPOSED (A-11).
+
+**Future-only option [PROPOSED]:** let the player select/recruit contestants and perform background research. For the initial game, the casting and research have already taken place offscreen.
 
 ## Candidate private model [PROPOSED]
 Identity/traits; motives for staying; perceived safety; fear/stress; beliefs about haunting vs production wrongdoing; trust by person; memory of witnessed events; goals/plans; evidence held; knowledge of defensive methods. Do not collapse these into a single omniscient suspicion score.
