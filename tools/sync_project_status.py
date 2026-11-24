@@ -134,6 +134,30 @@ def superseded(event_name, payload, comments, owner):
     return False
 
 
+def newer_project_state(event_name, event, project, number):
+    """A delayed status event must not overwrite newer authoritative project state.
+
+    PR lifecycle transitions (opened, ready_for_review, closed) move the Project
+    card without posting a new owner command, so a delayed /status comment processed
+    after them loses by chronology. Explicit owner commands still win via superseded().
+    The check only applies when the project state is demonstrably newer than the
+    event, so fresh comments keep applying.
+    """
+    if event_name != "issue_comment":
+        return False
+    current = project.current_status(number)
+    if not isinstance(current, tuple) or len(current) != 2:
+        return False
+    status, updated_at = current
+    created_at = (event.get("comment") or {}).get("created_at")
+    if not status or not updated_at or not isinstance(created_at, str):
+        return False
+    try:
+        return status in ("In Progress", "In Review") and updated_at > created_at
+    except TypeError:
+        return False
+
+
 class GitHub:
     def __init__(self, token):
         if not token:
@@ -217,6 +241,7 @@ query ($owner: String!, $repo: String!, $number: Int!) {
       projectItems(first: 100) {
         nodes {
           id
+          updatedAt
           project { id }
           fieldValues(first: 30) {
             nodes {
@@ -274,13 +299,18 @@ class Project:
                 continue
             for field in item.get("fieldValues", {}).get("nodes", []):
                 if field and field.get("field", {}) and field["field"].get("id") == self.field:
-                    return item["id"], field["name"], issue["id"]
-            return item["id"], None, issue["id"]
-        return None, None, issue["id"]
+                    return item["id"], field["name"], issue["id"], item.get("updatedAt")
+            return item["id"], None, issue["id"], item.get("updatedAt")
+        return None, None, issue["id"], None
+
+    def current_status(self, number):
+        """Current Status and when its Project item was last updated (None when unknown)."""
+        item, status, _issue, updated_at = self.find_item(number)
+        return status, updated_at
 
     def update(self, number, status, *, preserve_open=False):
         status = normalize_status(status)
-        item, current, issue = self.find_item(number)
+        item, current, issue, _updated_at = self.find_item(number)
         if preserve_open and current and current != "Done":
             print(f"#{number}: keep existing {current}")
             return
@@ -345,6 +375,8 @@ def main():
         elif status != "Done" and superseded(
                 event_name, event, api.issue_comments(owner, repo, number), owner):
             print(f"#{number}: skip stale status event; newer owner command exists")
+        elif status != "Done" and newer_project_state(event_name, event, project, number):
+            print(f"#{number}: skip stale status event; newer project state exists")
         else:
             project.update(number, status)
     if not updates:

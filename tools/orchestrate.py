@@ -846,7 +846,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
         nodes { number repository { nameWithOwner } }
       }
       openImplementation: closedByPullRequestsReferences(first: 1) { totalCount }
-      timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT]) {
+      timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT,
+                                          BLOCKED_BY_ADDED_EVENT, BLOCKED_BY_REMOVED_EVENT,
+                                          BLOCKING_ADDED_EVENT, BLOCKING_REMOVED_EVENT]) {
         nodes {
           __typename
           ... on ReopenedEvent { createdAt }
@@ -1021,7 +1023,20 @@ class ReadyBoard:
         if detail["state"] != "closed":
             return False
         detail["graph"] = self.graph_issue(number)
-        return accepted_dependency(detail)
+        return accepted_dependency(detail) and not self.unaccepted_implementation_prs(number)
+
+    def unaccepted_implementation_prs(self, number):
+        """Branch-only open/draft or closed-unmerged implementation PRs on an issue.
+
+        Uses the same closing-keyword/branch detection as dispatch-time checks, so a
+        completed issue with overlooked implementation work is not accepted. A merged
+        PR is the accepted completion evidence itself and does not block.
+        """
+        return [
+            pr for pr in self.api(
+                f"repos/{REPOSITORY}/pulls?state=all&per_page=100", pages=True)
+            if not pr.get("merged") and implementation_pr(pr, number)
+        ]
 
     def status_commands(self, number):
         comments = self.api(f"repos/{REPOSITORY}/issues/{number}/comments?per_page=100", pages=True)
@@ -1130,7 +1145,8 @@ def queue_candidate(board, number, *, claim=None, current_pr=None):
     if (not command or command["body"].strip().casefold() != "/status ready"
             or command["updated_at"] != command["created_at"]
             or command["created_at"] <= boundary):
-        raise Blocked("needs a fresh, unedited owner /status Ready after issue edits or reopening")
+        raise Blocked("needs a fresh, unedited owner /status Ready after issue edits, "
+                      "reopening or native dependency changes")
     return {"number": number, "title": detail["title"], "body": detail["body"],
             "url": detail["html_url"], "issue_type": issue_type,
             "priority": priority, "workstream": workstream, "dependencies": dependencies,

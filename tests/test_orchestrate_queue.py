@@ -105,6 +105,8 @@ class FakeBoard(mod.ReadyBoard):
         path = path.removeprefix(f"repos/{mod.REPOSITORY}/")
         if path == "pulls?state=open&per_page=100" and pages:
             return self.prs
+        if path == "pulls?state=all&per_page=100" and pages:
+            return self.prs
         _, n, *extra = path.split("/")
         number = int(n)
         if not extra:
@@ -220,6 +222,41 @@ class QueueTests(unittest.TestCase):
         self.board.link_prs(7, 90)
         self.assertEqual(self.ordered_numbers(), [])
         self.assertIn("WAIT #4", self.output.getvalue())
+
+    def test_native_dependency_removal_after_ready_requires_fresh_authorization(self):
+        self.board.add(4, body="Do the queue work")
+        ready = self.board.comments[4][0]
+        ready["created_at"] = ready["updated_at"] = EARLIER
+        self.board.blocked_by[4] = [issue(7), issue(8)]
+        self.board.add(7, status="Done")
+        self.board.accept(7)
+        # The open edge 8 is still present: the issue waits on it.
+        self.assertEqual(self.ordered_numbers(), [])
+        self.assertIn("WAIT #4", self.output.getvalue())
+        # The open edge is removed after the owner posted /status Ready: the old
+        # authorization must not silently release the issue.
+        self.board.blocked_by[4] = [issue(7)]
+        self.board.events[4] = [{"__typename": "BlockedByRemovedEvent", "id": 4,
+                                "createdAt": NOW, "blockingIssue": {"number": 8}}]
+        self.assertEqual(self.ordered_numbers(), [])
+        self.assertIn("SKIP #4", self.output.getvalue())
+
+    def test_manual_completion_with_branch_only_implementation_pr_does_not_unlock_successor(self):
+        self.board.add(4, body="Queue prerequisites: #7")
+        self.board.add(7, status="Done")
+        self.board.accept(7)
+        self.assertEqual(self.ordered_numbers(), [4])  # Accepted non-PR completion.
+        self.board.prs.append({"number": 90, "body": None,
+                               "head": {"ref": "agent/issue-7-wip"}})
+        self.assertEqual(self.ordered_numbers(), [])
+        self.assertIn("WAIT #4", self.output.getvalue())
+
+    def test_queue_issue_query_tracks_native_dependency_changes(self):
+        # Finding 1: the runner must read native add/remove timeline events so a
+        # stale Ready cannot survive dependency changes.
+        for typename in ("BLOCKED_BY_ADDED_EVENT", "BLOCKED_BY_REMOVED_EVENT",
+                         "BLOCKING_ADDED_EVENT", "BLOCKING_REMOVED_EVENT"):
+            self.assertIn(typename, mod.QUEUE_ISSUE_QUERY)
 
     def test_missing_ambiguous_or_contradictory_dependencies_fail_closed(self):
         self.board.add(1, body="Queue prerequisites: #9999")

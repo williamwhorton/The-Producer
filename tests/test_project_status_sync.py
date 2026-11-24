@@ -204,6 +204,42 @@ class EventTests(unittest.TestCase):
                 else:
                     project.return_value.update.assert_called_once_with(4, expected)
 
+    def run_comment_event(self, *, project_state, comment_time):
+        """Process one /status In Progress issue_comment with a mocked board."""
+        event = {"action": "created", "issue": {"number": 4, "state": "open"},
+                 "comment": {"id": 42, "body": "/status In Progress",
+                              "created_at": comment_time,
+                              "user": {"login": self.OWNER}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            event_path = Path(tmp) / "event.json"
+            event_path.write_text(json.dumps(event))
+            with patch.dict(os.environ, {"GITHUB_REPOSITORY": f"{self.OWNER}/{self.REPO}",
+                                          "PROJECT_NUMBER": "7",
+                                          "GITHUB_EVENT_NAME": "issue_comment",
+                                          "GITHUB_EVENT_PATH": str(event_path)}), \
+                 patch.object(sync, "GitHub") as github, \
+                 patch.object(sync, "Project") as project:
+                github.return_value.issue.return_value = {"state": "open"}
+                github.return_value.issue_comments.return_value = []
+                project.return_value.current_status.return_value = project_state
+                self.assertEqual(sync.main(), 0)
+        return project.return_value.update.call_args
+
+    def test_delayed_in_progress_comment_does_not_overwrite_newer_ready_pr_transition(self):
+        # Regression: an older /status In Progress comment processed after a newer
+        # ready PR transition (board already at In Review) must not overwrite it.
+        update = self.run_comment_event(
+            project_state=("In Review", "2026-11-24T21:10:00Z"),
+            comment_time="2026-11-24T21:09:30Z")
+        self.assertIsNone(update)
+
+    def test_comment_applies_when_project_state_is_not_newer(self):
+        # Same event when the board state predates the comment: it still applies.
+        update = self.run_comment_event(
+            project_state=("In Progress", "2026-11-24T21:08:00Z"),
+            comment_time="2026-11-24T21:09:30Z")
+        self.assertEqual(update.args, (4, "In Progress"))
+
 
 class ProjectTests(unittest.TestCase):
     def test_preserve_active_status_and_set_review(self):
