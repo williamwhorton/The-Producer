@@ -24,6 +24,10 @@
 - **Physical illusion:** Could a more sophisticated projection/holographic ghost fit later, or would it become too much like a genuine haunting and exceed the initial content/effect budget?
 - **Autonomy:** Contestants must retain choices to investigate staged phenomena and react differently; the producer cannot click a "make frightened" command. Separately modeled supernatural manifestations should not inherit unconditional practical-effect controls.
 
+## Cast-specific triggers and source-grounded producer knowledge (#16)
+
+**CONFIRMED:** Every contestant has at least one personally meaningful fear/history/association with an object, person, memory or idea; **the overnight alteration choices derive from those hooks** rather than a generic prank list. The doll-phobia and deceased-relative photograph examples illustrate the concept, not an exhaustive set of content. **OPEN:** how the producer acquires or is shown these background facts (possible casting dossier/research), which hooks can be translated into quick nonstructural changes, whether everyone has multiple associations and how the menu handles absent/changed targets. **PROPOSED:** every offered choice has a guaranteed *significant* effect on at least one contestant; precise meaning and timing still need a design decision without overriding autonomy or leaking hidden mental state (A-11/A-12).
+
 ## Story-seed details to test later (not confirmed mechanics)
 
 - Proposed recruitment: a substantial cash prize and shared house ownership; illustrative notes specify $250,000 and a deed share.
