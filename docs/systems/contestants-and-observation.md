@@ -5,6 +5,14 @@
 ## Goals [CONFIRMED]
 Contestants act independently and can infer, investigate, collaborate, conceal information, flee, resist and confront supernatural threats. The producer cannot read their minds.
 
+## Cast-specific personal triggers and producer background [CONFIRMED direction; sourcing OPEN]
+
+Each contestant has **at least one meaningful fear or personal history/association** connected to an object, person, memory or idea. **Available overnight minor-intervention options are derived from those personalized hooks** (e.g., a doll-phobic contestant can be targeted with a doll; someone with a deceased relative may encounter that person's photograph). An option must still be a physically plausible quick nonstructural stage change.
+
+**Producer-facing context must come from a legitimate source.** Casting interviews, vetting or background research could explain knowledge of some historical or personal facts, but the exact source, completeness and dossier/UI are OPEN. Showing a background fact to the producer is **not** the same as showing raw current fear, memories, beliefs or plans from `PrivateContestantState`. ADR-0004 still requires allowlisted source-grounded player views.
+
+Targeting a contestant's known trigger does **not** automatically dictate their action or emotional state. The harder **guaranteed significant consequence** for each offered option remains PROPOSED under A-11; the personal association is now CONFIRMED as the source of candidate interventions (A-12).
+
 ## Candidate private model [PROPOSED]
 Identity/traits; motives for staying; perceived safety; fear/stress; beliefs about haunting vs production wrongdoing; trust by person; memory of witnessed events; goals/plans; evidence held; knowledge of defensive methods. Do not collapse these into a single omniscient suspicion score.
 
