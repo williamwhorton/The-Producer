@@ -39,7 +39,7 @@ asset downloads, plugins, or runtime services are needed.
 | `observation/` | Public information from the static, producer-known floor plan. The lookup returns a display name or no label; it neither receives private state nor grants access to additional information. Future live evidence must follow [ADR-0004](../docs/decisions/ADR-0004-producer-observation-boundary.md). |
 | `world/` | Preview geometry, camera, lighting, cutaway, picking and floor highlight. The adapter emits a room ID, not a collider or 3D position. |
 | `ui/` | Title, room label and controls hint; no world or domain script dependency. |
-| `simulation/` | Reserved for private game rules and state. Nothing ticks, acts autonomously or draws random numbers in #27. |
+| `simulation/` | [Private seeded scheduler and clock](simulation/README.md) (#28). The static house preview does not run a contest simulation. |
 | `persistence/` | Reserved for save/load and campaign state. No save API, format or storage is chosen or used. |
 
 The preview uses local Godot scenes/scripts only: a headless boot path (T-01
@@ -59,26 +59,28 @@ bash game/tests/headless.sh
 CI verifies the official Linux x86_64 archive checksum before running this
 script on Ubuntu 24.04. The script checks the full engine version, keeps Godot's
 output visible, and fails on a nonzero exit, a 60-second command timeout, or a
-Godot error in the logs. It runs these three commands in order:
+Godot error in the logs. It runs these commands in order:
 
 ```sh
 godot --headless --path game --editor --import
 godot --headless --path game --quit-after 2
 godot --headless --path game --script res://tests/smoke.gd
+godot --headless --path game --script res://tests/scheduler.gd
 ```
 
 The first two commands should exit successfully without script/scene errors.
-The last loads the configured main scene and checks the active orthographic
+The smoke test loads the configured main scene and checks the active orthographic
 camera, initial HUD, both floor picks, desk occlusion, background clearing and
 unknown room IDs. Expect exit 0 and
 `PASS: configured main scene, orthographic camera, room picking, and HUD`.
-This is the current production suite, not a simulation regression suite:
-`game/simulation/` has no runnable tests yet, and the disposable `spikes/` are
-not used as substitutes. Headless checks do not verify rendered output.
+The scheduler test runs separately from the scene; expect exit 0 and
+`PASS: seeded scheduler ordering, tactical pause, live triggers, and speed invariance`.
+The disposable `spikes/` are not used as substitutes. Headless checks do not
+verify rendered output.
 To repeat the automated checks with graphics enabled, run
 `godot --path game --script res://tests/smoke.gd`.
 
-## Recorded evidence
+## Recorded evidence for the #27 preview
 
 - On Bazzite `45.20261117.1` (Kinoite), using the pinned executable above,
   editor import and headless launch completed without script/scene errors.
