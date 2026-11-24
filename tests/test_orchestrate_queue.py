@@ -79,6 +79,10 @@ class FakeBoard(mod.ReadyBoard):
         self.events[number] = [{"__typename": "ClosedEvent", "stateReason": reason.upper(),
                                 "createdAt": NOW, "actor": {"login": actor}, "closer": closer}]
 
+    def link_prs(self, number, *prs):
+        self.linked_prs[number] = [
+            {"number": pr, "repository": {"nameWithOwner": mod.REPOSITORY}} for pr in prs]
+
     def graphql(self, query, **variables):
         if query == mod.BOARD_QUERY:
             return board_page(list(self.cards.values()))
@@ -86,10 +90,11 @@ class FakeBoard(mod.ReadyBoard):
             return {"node": next((c for c in self.cards.values() if c["id"] == variables["id"]), None)}
         if query == mod.QUEUE_ISSUE_QUERY:
             n = variables["number"]
+            linked = self.linked_prs.get(n, [])
             return {"repository": {"issue": {
                 "number": n, "lastEditedAt": self.issues[n].get("lastEditedAt"),
                 "timelineItems": {"nodes": self.events.get(n, [])},
-                "closedByPullRequestsReferences": {"totalCount": self.linked_prs.get(n, 0)},
+                "closedByPullRequestsReferences": {"totalCount": len(linked), "nodes": linked[:1]},
                 "openImplementation": {"totalCount": self.open_linked_prs.get(n, 0)},
             }}}
         raise AssertionError(query)
@@ -136,10 +141,11 @@ class QueueTests(unittest.TestCase):
         self.enterContext(patch.object(mod, "registered_worktrees", return_value=[{"path": self.repo}]))
         self.output = self.enterContext(contextlib.redirect_stdout(io.StringIO()))
 
-    def preflight_mocks(self):
-        self.enterContext(patch.object(mod, "ReadyBoard", return_value=self.board))
-        self.enterContext(patch.object(mod, "host_preflight",
-                                      return_value=("2.4.1", "--agent --standalone --model")))
+    def preflight_mocks(self, enter=None):
+        enter = enter or self.enterContext
+        enter(patch.object(mod, "ReadyBoard", return_value=self.board))
+        enter(patch.object(mod, "host_preflight",
+                           return_value=("2.4.1", "--agent --standalone --model")))
         def command(argv, *_args, **_kwargs):
             if argv[:2] == ["opencode", "models"]:
                 return MODEL.split("#")[0]
@@ -148,7 +154,7 @@ class QueueTests(unittest.TestCase):
             if argv[0] == "git":
                 return "a" * 40
             raise AssertionError(argv)
-        return self.enterContext(patch.object(mod, "run_cmd", side_effect=command))
+        return enter(patch.object(mod, "run_cmd", side_effect=command))
 
     def ordered_numbers(self):
         return [d["number"] for d, _ in mod.queue_snapshot(self.board)]
@@ -206,6 +212,15 @@ class QueueTests(unittest.TestCase):
         self.board.open_linked_prs[7] = 0
         self.assertEqual(self.ordered_numbers(), [4])
 
+    def test_manual_completion_with_closed_unmerged_implementation_does_not_unlock_successor(self):
+        self.board.add(4, body="Queue prerequisites: #7")
+        self.board.add(7, status="Done")
+        self.board.accept(7)
+        self.assertEqual(self.ordered_numbers(), [4])  # Accepted non-PR work.
+        self.board.link_prs(7, 90)
+        self.assertEqual(self.ordered_numbers(), [])
+        self.assertIn("WAIT #4", self.output.getvalue())
+
     def test_missing_ambiguous_or_contradictory_dependencies_fail_closed(self):
         self.board.add(1, body="Queue prerequisites: #9999")
         self.board.add(2, body="- **Prerequisites:** #1 and maybe #6")
@@ -230,7 +245,7 @@ class QueueTests(unittest.TestCase):
         self.board.comments[6][0]["user"]["login"] = "someone"
         self.board.add(7, lastEditedAt=NOW)
         self.board.add(8)
-        self.board.linked_prs[8] = 1
+        self.board.link_prs(8, 90)
         self.board.add(9)
         self.board.prs.append({"body": None, "head": {"ref": "agent/issue-9-being-developed"}})
         self.board.add(10)
@@ -333,6 +348,32 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.state(1)["phase"], "status_unverified")
         self.assertFalse((mod.run_home(self.repo) / "issue-2").exists())
 
+    def test_owner_withdrawal_between_claim_read_and_post_stops_before_build(self):
+        self.preflight_mocks()
+        self.args.once = False
+        self.board.add(1)
+        self.board.add(2)
+        post = self.board.post_comment
+
+        def interleave(number, body):
+            self.board.comments[number].append({
+                **self.board.comments[number][0], "id": self.board.next_id,
+                "body": "/status Backlog",
+            })
+            # Withdrawal has reached the comment history, but not the board.
+            return post(number, body)
+
+        with patch.object(self.board, "post_comment", side_effect=interleave), \
+             patch.object(mod, "verify_checkout"), \
+             patch.object(mod, "run_agent", side_effect=AssertionError("Build launched")) as launch:
+            with self.assertRaisesRegex(mod.GitHubUnavailable, "status conflict"):
+                mod.queue_mode(self.args)
+        launch.assert_not_called()
+        self.assertEqual(self.board.posts, [(1, "/status In Progress")])
+        self.assertEqual(self.state(1)["phase"], "status_unverified")
+        self.assertIn("status conflict", self.state(1)["reason"])
+        self.assertFalse((mod.run_home(self.repo) / "issue-2").exists())
+
     def test_rechecks_claim_against_same_scope_before_build(self):
         self.preflight_mocks()
         self.board.add(1)
@@ -345,6 +386,90 @@ class QueueTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertEqual(self.board.posts, [(1, "/status In Progress")])
         self.assertEqual(self.state(1)["phase"], "status_unverified")
+
+    def test_correction_does_not_start_when_authorization_changes_during_review(self):
+        for n, change in enumerate(("withdrawal", "assignee", "scope", "prerequisite",
+                                    "unexpected linked PR", "two linked PRs", "another open PR"), start=1):
+            with self.subTest(change=change):
+                self.board = FakeBoard(self.repo)
+                self.board.add(n, body="Queue prerequisites: #30")
+                self.board.add(30, status="Done")
+                self.board.accept(30)
+                pr = sample_pr()
+                calls = []
+
+                def run_agent(argv, *_args):
+                    calls.append(argv[argv.index("--agent") + 1])
+                    if calls == ["build"]:
+                        return "Build done"
+                    if calls != ["build", "producer-reviewer"]:
+                        self.fail("corrective Build started without authorization")
+                    self.board.cards[n] = card(n, "In Review")
+                    self.board.link_prs(n, pr["number"])
+                    self.board.prs.append({"number": pr["number"], "body": f"Closes #{n}",
+                                           "head": {"ref": pr["headRefName"]}})
+                    if change == "withdrawal":
+                        self.board.sync = False  # The board still says In Review.
+                        self.board.post_comment(n, "/status Backlog")
+                    elif change == "assignee":
+                        self.board.issues[n]["assignees"] = [{"login": mod.OWNER}]
+                    elif change == "scope":
+                        self.board.issues[n]["body"] += "\nNew scope"
+                    elif change == "prerequisite":
+                        self.board.issues[30]["state"] = "open"
+                    elif change == "unexpected linked PR":
+                        self.board.link_prs(n, pr["number"] + 1)
+                    elif change == "two linked PRs":
+                        self.board.link_prs(n, pr["number"], pr["number"] + 1)
+                    elif change == "another open PR":
+                        self.board.prs.append({"number": pr["number"] + 1, "body": f"Closes #{n}",
+                                               "head": {"ref": "other-implementation"}})
+                    return "REVIEW_VERDICT: REQUEST_CHANGES"
+
+                with contextlib.ExitStack() as stack, patch.object(mod, "verify_checkout"), \
+                     patch.object(mod, "pr_details", return_value=pr), \
+                     patch.object(mod, "run_agent", side_effect=run_agent):
+                    self.preflight_mocks(stack.enter_context)
+                    with self.assertRaisesRegex(mod.GitHubUnavailable, "could not be revalidated"):
+                        mod.queue_mode(self.args)
+                self.assertEqual(calls, ["build", "producer-reviewer"])
+                self.assertEqual(self.state(n)["phase"], "status_unverified")
+                self.assertEqual(self.state(n)["last_verdict"], "REQUEST_CHANGES")
+                self.assertNotIn((n, "/status Blocked"), self.board.posts)
+
+    def test_correction_allows_the_reviewed_pr_and_verified_in_review_card(self):
+        commands = self.preflight_mocks()
+        self.board.add(14)
+        pr, updated = sample_pr(), sample_pr("b" * 40)
+        original_command = commands.side_effect
+        fetched = iter([pr["headRefOid"], updated["headRefOid"]])
+
+        def command(argv, *args, **kwargs):
+            if argv == ["git", "rev-parse", "FETCH_HEAD"]:
+                return next(fetched)
+            return original_command(argv, *args, **kwargs)
+
+        commands.side_effect = command
+
+        def build_pr(*_args):
+            self.board.cards[14] = card(14, "In Review")
+            self.board.link_prs(14, pr["number"])
+            self.board.prs.append({"number": pr["number"], "body": pr["body"],
+                                   "head": {"ref": pr["headRefName"]}})
+            return "Build done"
+
+        with patch.object(mod, "verify_checkout"), patch.object(mod, "record_cleanup"), \
+             patch.object(mod, "pr_details", side_effect=[pr, pr, updated, updated]), \
+             patch.object(mod, "run_agent") as agent:
+            outcomes = iter([build_pr, lambda *_: "REVIEW_VERDICT: REQUEST_CHANGES",
+                             lambda *_: "Correction done", lambda *_: "REVIEW_VERDICT: APPROVE"])
+            agent.side_effect = lambda *args: next(outcomes)(*args)
+            self.assertEqual(mod.queue_mode(self.args), 0)
+        self.assertEqual([call.args[0][4] for call in agent.call_args_list],
+                         ["build", "producer-reviewer", "build", "producer-reviewer"])
+        self.assertEqual(self.board.posts, [(14, "/status In Progress"), (14, "/status In Review")])
+        self.assertEqual(self.state(14)["verified_status"], "In Review")
+        self.assertEqual(self.state(14)["head_sha"], updated["headRefOid"])
 
     def test_unverified_blocked_handoff_stops_unrelated_dispatch(self):
         self.preflight_mocks()

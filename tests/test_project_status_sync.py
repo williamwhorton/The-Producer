@@ -1,7 +1,11 @@
 """Offline tests for the GitHub Project status sync logic."""
 import importlib.util
+import json
+import os
 from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 FILE = Path(__file__).resolve().parents[1] / "tools" / "sync_project_status.py"
 spec = importlib.util.spec_from_file_location("project_sync", FILE)
@@ -164,7 +168,41 @@ class EventTests(unittest.TestCase):
         self.assertFalse(sync.superseded("issue_comment", {"comment": blocked},
                                          [claim, blocked, stranger], self.OWNER))
         self.assertTrue(sync.superseded("issue_comment", {"comment": claim},
-                                        [{**claim, "body": "/status Backlog"}], self.OWNER))
+                                         [{**claim, "body": "/status Backlog"}], self.OWNER))
+
+    def test_delayed_open_or_reopen_preserves_owner_status_and_closed_issues_stay_done(self):
+        created = "2026-11-24T21:00:00Z"
+        reopened = "2026-11-24T21:02:00Z"
+        later = "2026-11-24T21:03:00Z"
+        for action, state, command_time, expected in [
+            ("opened", "open", "2026-11-24T21:01:00Z", None),
+            ("reopened", "open", later, None),
+            ("reopened", "open", reopened, None),  # GitHub timestamps have second precision.
+            ("reopened", "open", created, "Backlog"),
+            ("reopened", "closed", later, "Done"),
+            ("closed", "closed", later, "Done"),
+        ]:
+            with self.subTest(action=action, state=state, command_time=command_time), \
+                 tempfile.TemporaryDirectory() as tmp:
+                event_path = Path(tmp) / "event.json"
+                event_path.write_text(json.dumps({"action": action, "issue": {
+                    "number": 4, "created_at": created, "updated_at": reopened,
+                }}))
+                with patch.dict(os.environ, {"GITHUB_REPOSITORY": f"{self.OWNER}/{self.REPO}",
+                                             "PROJECT_NUMBER": "7", "GITHUB_EVENT_NAME": "issues",
+                                             "GITHUB_EVENT_PATH": str(event_path)}), \
+                     patch.object(sync, "GitHub") as github, patch.object(sync, "Project") as project:
+                    project.return_value.title = "The Producer"
+                    github.return_value.issue.return_value = {"state": state}
+                    github.return_value.issue_comments.return_value = [{
+                        "id": 1, "body": "/status Ready" if action == "opened" else "/status In Progress",
+                        "created_at": command_time, "user": {"login": self.OWNER},
+                    }]
+                    self.assertEqual(sync.main(), 0)
+                if expected is None:
+                    project.return_value.update.assert_not_called()
+                else:
+                    project.return_value.update.assert_called_once_with(4, expected)
 
 
 class ProjectTests(unittest.TestCase):

@@ -109,7 +109,7 @@ def decide_event(event_name, payload, owner, repo):
 
 
 def superseded(event_name, payload, comments, owner):
-    """An older PR or comment job must not undo a later owner command."""
+    """Older jobs must not undo a later owner command on an open issue."""
     commands = [
         c for c in comments
         if (c.get("user") or {}).get("login", "").casefold() == owner.casefold()
@@ -126,6 +126,11 @@ def superseded(event_name, payload, comments, owner):
         timestamp = pr["created_at"] if payload["action"] == "opened" else pr["updated_at"]
         return latest["created_at"] > timestamp or (
             latest["created_at"] == timestamp and comment_status(latest["body"]) == "Blocked")
+    if event_name == "issues" and payload["action"] in ("opened", "reopened"):
+        key = "created_at" if payload["action"] == "opened" else "updated_at"
+        # On a same-second tie, prefer an explicit open status over default Backlog.
+        return (latest["created_at"] >= payload["issue"][key]
+                and comment_status(latest["body"]) != "Done")
     return False
 
 
@@ -337,7 +342,7 @@ def main():
             raise SyncError(f"Cannot mark open issue #{number} Done")
         if status != "Done" and issue["state"] == "closed":
             project.update(number, "Done")
-        elif event_name in ("issue_comment", "pull_request_target") and superseded(
+        elif status != "Done" and superseded(
                 event_name, event, api.issue_comments(owner, repo, number), owner):
             print(f"#{number}: skip stale status event; newer owner command exists")
         else:

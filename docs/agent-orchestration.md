@@ -132,7 +132,7 @@ Once preflight succeeds and the status workflow change is on trusted `main`, aut
 python3 tools/orchestrate.py --queue --project "$PROJECT_NUMBER" --model "$MODEL" --once --timeout-minutes 15
 ```
 
-Expect one verified In Progress claim before Build, a separate Reviewer at the PR head, and a verified In Review handoff for a technically approved **unmerged** PR. A task failure must show a reason, retain evidence, and verify Blocked. A status/auth/API failure halts the queue; a successful `gh` comment alone is not board verification. When the bounded live check succeeds, start continuous operation explicitly:
+Expect one verified In Progress claim before Build, a separate Reviewer at the PR head, and a verified In Review handoff for a technically approved **unmerged** PR. The claim must immediately follow the authorizing Ready command in owner status history. Before a corrective Build, the host rechecks that authorization, issue ownership and scope, and prerequisite acceptance; the current PR and In Review status are allowed. A task failure must show a reason, retain evidence, and verify Blocked. A status conflict or unverifiable authorization halts the queue without another status command; inspect the retained state, owner commands and board, and reconcile them before resuming. When the bounded live check succeeds, start continuous operation explicitly:
 
 ```sh
 python3 tools/orchestrate.py --queue --project "$PROJECT_NUMBER" --model "$MODEL" --poll-seconds 60

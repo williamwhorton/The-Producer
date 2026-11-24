@@ -717,14 +717,13 @@ def develop_and_review(args, repo, model, info, state_dir, *, before_build=None)
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
         verify_checkout(dev, expected_branch=branch)
-        if queued:
-            before_build()
         prompt = developer_prompt(issue, branch, dev)
         queue_instructions = ("\nThe host runner owns Project status transitions for this queue "
                               "assignment. Do not post /status commands or change Project status; "
                               "report blockers and evidence to the host.")
         if queued:
             prompt += queue_instructions
+            before_build()
         run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
                    prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
         verify_checkout(dev, expected_branch=branch)
@@ -753,7 +752,7 @@ def develop_and_review(args, repo, model, info, state_dir, *, before_build=None)
                                     args.timeout_minutes * 60)
             verdict = review_verdict(review_text)
             latest = pr_details(branch, issue, repo)
-            if latest["headRefOid"] != pr["headRefOid"]:
+            if latest["number"] != pr["number"] or latest["headRefOid"] != pr["headRefOid"]:
                 raise Blocked("PR head changed during review; verdict is stale.")
             write_state(state_file, last_verdict=verdict)
             if verdict == "APPROVE":
@@ -774,6 +773,7 @@ def develop_and_review(args, repo, model, info, state_dir, *, before_build=None)
             prompt = correction_prompt(issue, pr, review_text)
             if queued:
                 prompt += queue_instructions
+                before_build(current_pr=pr["number"])
             run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
                        model, prompt], dev,
                       state_dir / "developer-1.log", args.timeout_minutes * 60)
@@ -843,6 +843,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
       number lastEditedAt
       closedByPullRequestsReferences(first: 1, includeClosedPrs: true) {
         totalCount
+        nodes { number repository { nameWithOwner } }
       }
       openImplementation: closedByPullRequestsReferences(first: 1) { totalCount }
       timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT]) {
@@ -893,16 +894,19 @@ def accepted_dependency(detail):
     """Verify human completion, not a Done card or a closed-as-not-planned issue."""
     if detail["state"] != "closed" or detail.get("state_reason") != "completed":
         return False
-    events = detail["graph"]["timelineItems"]["nodes"]
+    graph = detail["graph"]
+    events = graph["timelineItems"]["nodes"]
     if not events or events[0]["__typename"] != "ClosedEvent":
         return False
     event = events[0]
     if (event["stateReason"] != "COMPLETED" or event["createdAt"] != detail.get("closed_at")
-            or detail["graph"]["openImplementation"]["totalCount"]):
+            or graph["openImplementation"]["totalCount"]):
         return False
     closer = event["closer"]
     if closer is None:
-        return (event.get("actor") or {}).get("login") == OWNER
+        # Manual closure is evidence for non-PR work, not for abandoned PRs.
+        return (graph["closedByPullRequestsReferences"]["totalCount"] == 0
+                and (event.get("actor") or {}).get("login") == OWNER)
     return (closer["__typename"] == "PullRequest" and closer["state"] == "MERGED"
             and closer["baseRefName"] == BASE_BRANCH
             and closer["repository"]["nameWithOwner"] == REPOSITORY
@@ -1019,13 +1023,13 @@ class ReadyBoard:
         detail["graph"] = self.graph_issue(number)
         return accepted_dependency(detail)
 
-    def latest_status_command(self, number):
+    def status_commands(self, number):
         comments = self.api(f"repos/{REPOSITORY}/issues/{number}/comments?per_page=100", pages=True)
         commands = [
             c for c in comments if (c.get("user") or {}).get("login") == OWNER
             and STATUS_COMMAND.fullmatch(c["body"].strip())
         ]
-        return max(commands, key=lambda c: (c["created_at"], c["id"]), default=None)
+        return sorted(commands, key=lambda c: (c["created_at"], c["id"]), reverse=True)
 
     def post_comment(self, number, body):
         comment = self.api(f"repos/{REPOSITORY}/issues/{number}/comments", body=body)
@@ -1035,8 +1039,8 @@ class ReadyBoard:
         return comment["id"]
 
     def transition(self, number, card, status, *, in_place_of, from_status):
-        latest = self.latest_status_command(number)
-        if not latest or latest["id"] != in_place_of:
+        commands = self.status_commands(number)
+        if not commands or commands[0]["id"] != in_place_of:
             raise GitHubUnavailable(f"#{number}: owner status command changed; will not overwrite it.")
         if self.status(number, card) not in from_status:
             raise GitHubUnavailable(f"#{number}: Project status changed; will not overwrite it.")
@@ -1044,10 +1048,17 @@ class ReadyBoard:
         for attempt in range(25):
             current = self.status(number, card)
             if current == status:
-                latest = self.latest_status_command(number)
-                if latest and latest["id"] == posted and latest["body"].strip() == f"/status {status}":
-                    return posted
-                raise GitHubUnavailable(f"#{number}: {status} command was superseded or cannot be verified.")
+                commands = self.status_commands(number)
+                if (not commands or commands[0]["id"] != posted
+                        or commands[0]["body"].strip() != f"/status {status}"):
+                    raise GitHubUnavailable(f"#{number}: {status} command was superseded or cannot be verified.")
+                # A newer owner command can arrive between our last read and POST.
+                previous = commands[1]["id"] if len(commands) > 1 else None
+                if previous != in_place_of:
+                    raise GitHubUnavailable(
+                        f"#{number}: status conflict: command {posted} followed {previous}, not "
+                        f"expected command {in_place_of}. Reconcile the owner commands and board before resuming.")
+                return posted
             if current not in from_status:
                 break
             if attempt < 24:
@@ -1062,7 +1073,7 @@ def implementation_pr(pr, number):
             or re.match(rf"agent/issue-{number}(?:-|$)", pr["head"]["ref"]))
 
 
-def queue_candidate(board, number, *, claim=None):
+def queue_candidate(board, number, *, claim=None, current_pr=None):
     detail = board.issue(number)
     if detail["state"] != "open":
         raise Blocked("issue is not open")
@@ -1078,18 +1089,11 @@ def queue_candidate(board, number, *, claim=None):
     if not (detail.get("body") or "").strip() or detail["locked"]:
         raise Blocked("missing requirements or issue is locked")
     graph = board.graph_issue(number)
-    command = board.latest_status_command(number)
-    if claim is None:
-        boundary = max([graph["lastEditedAt"] or ""]
-                       + [e["createdAt"] for e in graph["timelineItems"]["nodes"]])
-        if (not command or command["body"].strip().casefold() != "/status ready"
-                or command["updated_at"] != command["created_at"]
-                or command["created_at"] <= boundary):
-            raise Blocked("needs a fresh, unedited owner /status Ready after issue edits or reopening")
-    elif not command or command["id"] != claim or command["body"].strip() != "/status In Progress":
-        raise GitHubUnavailable(f"#{number}: owner changed or withdrew the claim.")
-    if graph["closedByPullRequestsReferences"]["totalCount"] != 0:
-        raise Blocked("existing linked implementation PR; inspect it instead")
+    linked = graph["closedByPullRequestsReferences"]
+    if linked["totalCount"]:
+        expected = {"number": current_pr, "repository": {"nameWithOwner": REPOSITORY}}
+        if current_pr is None or linked["totalCount"] != 1 or linked["nodes"] != [expected]:
+            raise Blocked("unexpected linked implementation PR; inspect it instead")
     fields = board.api(f"repos/{REPOSITORY}/issues/{number}/issue-field-values")
     if not isinstance(fields, list):
         raise GitHubUnavailable(f"Cannot verify issue fields for #{number}.")
@@ -1113,6 +1117,20 @@ def queue_candidate(board, number, *, claim=None):
     dependencies = declared_prerequisites(detail["body"], native)
     if number in dependencies:
         raise Blocked("issue cannot depend on itself")
+    commands = board.status_commands(number)
+    if claim is not None:
+        if (not commands or commands[0]["id"] != claim
+                or commands[0]["body"].strip() != "/status In Progress"
+                or commands[0]["updated_at"] != commands[0]["created_at"]):
+            raise Blocked("owner changed or withdrew the claim")
+        commands = commands[1:]
+    command = commands[0] if commands else None
+    boundary = max([graph["lastEditedAt"] or ""]
+                   + [e["createdAt"] for e in graph["timelineItems"]["nodes"]])
+    if (not command or command["body"].strip().casefold() != "/status ready"
+            or command["updated_at"] != command["created_at"]
+            or command["created_at"] <= boundary):
+        raise Blocked("needs a fresh, unedited owner /status Ready after issue edits or reopening")
     return {"number": number, "title": detail["title"], "body": detail["body"],
             "url": detail["html_url"], "issue_type": issue_type,
             "priority": priority, "workstream": workstream, "dependencies": dependencies,
@@ -1178,14 +1196,18 @@ def dispatch_ready(args, board, model, detail, card):
     claim = None
     interrupted = False
 
-    def before_build():
+    def before_build(*, current_pr=None):
         try:
-            current = queue_candidate(board, number, claim=claim)
-            if (current != {**detail, "status_comment": claim}
-                    or not all(board.dependency(n) for n in sorted(current["dependencies"]))
-                    or any(implementation_pr(pr, number) for pr in open_prs(board))
-                    or board.status(number, card) != "In Progress"):
-                raise Blocked("issue scope, prerequisites, PRs or board status changed since claim")
+            if not all(board.dependency(n) for n in sorted(detail["dependencies"])):
+                raise Blocked("a prerequisite is no longer accepted")
+            if any(implementation_pr(pr, number) and pr["number"] != current_pr
+                   for pr in open_prs(board)):
+                raise Blocked("another implementation PR exists")
+            expected = ("In Progress", "In Review") if current_pr is not None else ("In Progress",)
+            if board.status(number, card) not in expected:
+                raise Blocked("Project status changed since claim")
+            if queue_candidate(board, number, claim=claim, current_pr=current_pr) != detail:
+                raise Blocked("issue scope or Ready authorization changed since claim")
         except Blocked as exc:
             raise GitHubUnavailable(f"#{number}: claim could not be revalidated: {exc}") from exc
 
