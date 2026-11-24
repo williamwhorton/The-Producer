@@ -28,6 +28,14 @@ Manufactured horror -> early genuine manifestations -> autonomous entities and e
 ## Contestant agency [CONFIRMED]
 Contestants can form private beliefs and alliances, share or withhold information, investigate, flee, cooperate, defend themselves, and attempt to exorcise/banish or neutralize supernatural threats. Success must not depend solely on scripted scenes.
 
+## House observation and communications [CONFIRMED baseline from #16]
+
+Hidden cameras grant full visibility into **every house room**, providing an in-world explanation for the fixed-angle dollhouse display. The producer can hear noises such as doors opening/closing. When contestants speak, an **on-screen conversation bubble** appears; the player must **click** it to see the text/details of the spoken exchange. Speech is not automatically printed and need not truthfully reflect a contestant's private belief.
+
+The house has **one shared telephone**; cell phones are **not allowed** in the contest. Telephone use has a similar inspectable bubble. How much of a call can be monitored, whether conversation/phone history is retained, whether opening a bubble pauses play and whether contestants can violate the phone ban are still undecided. Do not add camera placement, feed-selection micromanagement or blind spots as mandatory gameplay from this baseline. [ADR-0005](decisions/ADR-0005-house-surveillance-and-communications.md) documents the partial approval.
+
+The approved ADR-0004 observation projector remains in effect; **complete room visibility does not equal omniscience about minds or off-site events**.
+
 ## Off-site events as narrative vignettes [PROPOSED]
 
 Instead of building a navigable 3D town, consider **self-contained still-image-and-text event dialogs** for town visits and other off-site developments, modeled on Paradox event pop-ups and *Rogue Trader*-style choice interludes. A short description and static illustration communicate context; the event may provide **a meaningful player choice or simply convey information**. It may pause the game while the player reads or resolves it, but pause/trigger rules belong to the separate pacing decision (#17).
