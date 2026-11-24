@@ -95,6 +95,10 @@ These are *contracts and example names*, not an enforced schema or permission/se
 7. **No total-information vignette:** off-site narrative windows only show events that reach the producer through an allowed channel. “A contestant secretly spoke with a shopkeeper” is **not** an automatic producer popup unless a staff report, recording, returned testimony or similar authorized evidence exists. A later discovered document can surface past events **at discovery time**, not retroactively to the earlier UI.
 8. **Separate simulation results from visual disclosure:** hidden but simulated NPC movements and events must not accidentally appear in a 3D/2D renderer's visible view model. #16 decides camera/surveillance/abstract dollhouse visibility; this ADR does not pre-approve omniscient dollhouse vision.
 
+## Later clarification — Issue #16 house surveillance (2026-11-23)
+
+[ADR-0005](ADR-0005-house-surveillance-and-communications.md) adds a **new, expressly approved gameplay source**: hidden cameras cover **every house room**, and in-house conversation and telephone interaction expose on-click text through surveillance. The hypothetical **unmonitored pantry** scenario below remains valid as a test of the *default-deny observation principle*, but is **not a normal room inside the newly approved fully surveilled house**. Use an off-site setting or a synthetic fixture with surveillance intentionally absent for that test. The producer's ability to hear actual spoken words does **not** disclose unspoken beliefs or plans, and the new source scope does not change this ADR's approved projection boundary.
+
 ## Required Issue #3 example: an unwatched conversation
 
 **Illustrative test only, not new authorized mechanics.**
