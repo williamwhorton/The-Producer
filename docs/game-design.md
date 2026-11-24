@@ -28,6 +28,14 @@ Manufactured horror -> early genuine manifestations -> autonomous entities and e
 ## Contestant agency [CONFIRMED]
 Contestants can form private beliefs and alliances, share or withhold information, investigate, flee, cooperate, defend themselves, and attempt to exorcise/banish or neutralize supernatural threats. Success must not depend solely on scripted scenes.
 
+## Off-site events as narrative vignettes [PROPOSED]
+
+Instead of building a navigable 3D town, consider **self-contained still-image-and-text event dialogs** for town visits and other off-site developments, modeled on Paradox event pop-ups and *Rogue Trader*-style choice interludes. A short description and static illustration communicate context; the event may provide **a meaningful player choice or simply convey information**. It may pause the game while the player reads or resolves it, but pause/trigger rules belong to the separate pacing decision (#17).
+
+Example possibilities, **not confirmed scripted events**: a contestant talks to a suspiciously well-informed shopkeeper; a local newspaper prints a rumor about the estate; a contestant returns with an ambiguous account of an interaction downtown; a planted local reports whether the house's reputation is spreading. These should remain grounded in believable channels of knowledge.
+
+Architectural intent: game systems produce the event and determine consequences; the observation/application layer decides what the producer can legitimately learn and which interventions are offered; a UI modal renders the text/image and any choices. Neither a free-roaming town nor renderer-specific 3D nodes are prerequisites. The exact off-site mechanics, choices, art cost, real-time pause semantics and information-leakage restrictions must be tested/approved under #26, #17, #3 and #20. **No new mechanic is approved by Issue #1.**
+
 ## Information interface [CONFIRMED principle; PROPOSED details]
 Player-facing estimates of stress/fear/suspicion may exist, but should be uncertain, sourced and observational. The player should infer conspiracy from actions and evidence. Private conversations outside surveillance should not magically appear in production reports.
 
