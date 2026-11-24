@@ -21,9 +21,9 @@ Use *Darkest Dungeon* and *Cult of the Lamb* as **high-level visual/tonal refere
 ## Determinism [PROPOSED]
 Central seeded random stream(s), explicit tick/event ordering, stable serialization, and repeatable scenario fixtures. Test thousands of simulated ticks without graphics. Maintain causal event logs for agent debugging.
 
-## Proposed observation contract — Issue #3
+## Approved observation boundary — Issue #3
 
-[ADR-0004](decisions/ADR-0004-producer-observation-boundary.md) proposes a **source-mediated evidence projection** between private world events and all producer-facing world renderers, HUD panels, optional off-site narrative vignettes and reports. **This remains a proposal awaiting Creative Director approval.** Exact surveillance, reporting, confidence and producer-action mechanics are deliberately deferred. The game should not grant a dollhouse renderer omniscient access to unobserved contestant behavior simply because its simulation includes that state.
+[ADR-0004](decisions/ADR-0004-producer-observation-boundary.md) **approves a source-mediated, allowlisted evidence projection** between private world events and all producer-facing world renderers, HUD panels, optional off-site narrative vignettes and reports (Creative Director, 2026-11-23 ET). An unobserved event remains private; a witness or staff account conveys an **attributed claim**, not omniscient truth. Exact surveillance, reporting, confidence and producer-action mechanics are deliberately deferred. The game should not grant a dollhouse renderer omniscient access to unobserved contestant behavior simply because its simulation includes that state.
 
 ## Non-leakage architecture [REQUIRED]
 Separate private world state from observable production state. Player-facing views should consume only sanctioned observation/estimate interfaces. Add tests for accidental exposure through API, serialization, debug overlays and logs.
