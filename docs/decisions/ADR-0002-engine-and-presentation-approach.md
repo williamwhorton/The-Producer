@@ -1,10 +1,10 @@
 # ADR-0002 — Godot engine and dollhouse presentation approach
 
-**Status:** **PROPOSED — Creative Director approval required; no production choice adopted**  
+**Status:** **APPROVED — PROVISIONAL** (Creative Director; 2026-11-23, America/New_York). Godot 4 + GDScript with 3D orthographic presentation is the initial direction; 2D remains an explicitly supported fallback before major art investment.  
 **Date:** 2026-11-23  
 **Owner:** Architect (recommendation); Creative Director (decision authority)  
 **Related issue:** [#4](https://github.com/williamwhorton/The-Producer/issues/4)  
-**Related requirements:** G-02, G-03, G-06 (confirmed); T-01, T-03, T-04 (proposed); P-01 (OPEN)  
+**Related requirements:** G-02, G-03, G-06 (confirmed); T-01, T-04 (proposed); T-03 (approved boundary principle; detailed contracts TBD); P-01 (approved provisionally)  
 **Evidence:** [Issue #4 comparison](../issue-4-architecture-evaluation.md) and merged proofs [#13](../../spikes/issue-4-2d/README.md), [#14](../../spikes/issue-4-3d/README.md), [#15](../../spikes/issue-4-simulation/README.md)
 
 ## Context
@@ -23,7 +23,7 @@ This decision concerns **production engine/language and initial rendering approa
 - **Costs/risks:** manually projects world/height into screen space and maintains wall/marker draw order, polygon picking and upper-floor overlap. Future multi-level depth or complex lighting may require further hand-maintained rules or shaders.
 - **When preferable:** if the human prefers its exact visual readability or an approved art direction centers on 2D assets, or if later measured performance/asset-production cost favors it.
 
-### B. Godot 4 + GDScript, fixed-angle **3D orthographic** (recommended)
+### B. Godot 4 + GDScript, fixed-angle **3D orthographic** (selected provisionally)
 
 - **Demonstrated strengths:** same fixture and interactions; built-in depth testing and camera-ray picking replace aspects of 2D manual overlap management. Primitive 3D meshes already receive basic shading, with a fixed projected dollhouse view. No third-party renderer, external simulation service or runtime paid LLM is needed.
 - **Costs/risks:** mesh/material production and camera-space input are more involved; actual 3D geometry can obstruct room selection and ground markers, so cutaway/floor UX remains essential. The initial A-tile-edge ray-picking bug required a corrective PR. Real lighting atmosphere, scale performance, asset workflow and native compositor/GPU results are **not established**.
@@ -39,23 +39,26 @@ This decision concerns **production engine/language and initial rendering approa
 - Avoids commitment but blocks [#27](https://github.com/williamwhorton/The-Producer/issues/27) and the engine dependency for [#5](https://github.com/williamwhorton/The-Producer/issues/5) despite three functioning experiments. More generic comparison without a falsifiable question would create work without a clear decision benefit.
 - Reasonable only if the Creative Director finds both visuals unacceptable, or specifies a critical missing acceptance test.
 
-## Proposed decision — NOT APPROVED
+## Decision — APPROVED PROVISIONALLY
 
-**If and only if the Creative Director approves this ADR**, establish the following initial technical direction:
+**Creative Director's decision, 2026-11-23 (America/New_York):** Begin with **Godot 4 + GDScript and a fixed-angle 3D orthographic dollhouse**. The 2D prototype has a cleaner, appealing comic-like visual treatment; the Director expects the 3D renderer may reproduce that stylization while also permitting dynamic lighting and shadows. This is an **art direction hypothesis to test**, not a claim that the existing 3D prototype already achieves the look.
 
-1. **Engine/language:** Godot 4, GDScript. Pin and record the actual stable Godot version used for the first production slice rather than silently upgrading it; the prototypes were exercised with `4.7.2.stable.official.ed1daf0bf`.
-2. **Presentation:** fixed-angle **3D orthographic** dollhouse, with deliberate floor visibility and wall cutaway controls. The game remains a **producer-directed strategy/management experience**, not direct first-person or free-roaming contestant control. No free-orbit camera is authorized by this proposal.
-3. **Simulation and observation boundary:** keep world simulation callable headlessly without rendering, with explicit seeded tick/event ordering; expose player-facing information through a separate, allowlisted observation projection rather than direct references to private contestant state. **Exact interface, observations and estimate mechanics remain pending Issue #3**; the proof's three fields and dummy psychology do not establish a production schema.
-4. **Scope control:** introduce no external C# service, JSON/TCP IPC, SQLite, paid inference API, speculative ECS, generated house framework, or third-party test dependency merely to implement this decision. Do not copy disposable scripts wholesale into production without scope/quality review.
-5. **Reversibility:** retain both isolated visual spikes as comparison evidence. If the first scoped 3D slice fails the agreed visual usability, performance or authoring acceptance conditions, reconsider 2D using **observed failures**, not architectural loyalty.
+The decision is explicitly **reversible before substantial art production**. The architectural boundary must make a presentation swap practical without rebuilding contestant simulation or player-information rules. It does not promise switching 2D↔3D is cost-free: asset formats, occlusion, lighting, cameras, picking, animation and visual composition remain renderer-specific.
 
-**Approval record:** _Pending Creative Director decision. No approval date, acceptance conditions or sign-off has been supplied._  
-**Required human disposition:** Approve Option B; select Option A instead; or defer with an explicit additional evidence requirement. Do not change this line automatically on PR merge.
+1. **Engine/language:** Godot 4 and GDScript for the initial production path. Pin the chosen stable Godot version for the first production slice and log any upgrade; the disposable prototypes used `4.7.2.stable.official.ed1daf0bf`.
+2. **Presentation adapter:** Initial implementation uses **fixed-angle 3D orthographic** scene nodes and controls, supporting floor visibility, wall cutaway, room selection and atmospheric lighting/shadows as needed. Keep all engine-specific projection, picking, mesh, materials, camera and visual layer logic **behind an explicit presentation boundary**. Preserve the 2D approach as a fallback, not a second production renderer to maintain in parallel.
+3. **Separate three concerns:** (a) **game/simulation domain**, with deterministic and headless-testable state/events; (b) **observation/application interface**, exposing allowed evidence, state changes and producer actions to player features (exact observation contract remains **Issue #3**); and (c) **presentation**, split into the **world view renderer** (2D or 3D) and the **UI/HUD/producer tools**. UI must not import renderer-specific scene classes to determine game rules, and neither UI nor renderer receives unfiltered private simulation dictionaries. Share stable IDs and authorized view data, not 3D node references or 2D pixel coordinates, across boundaries. Avoid designing heavyweight frameworks before there is a real production use case.
+4. **Low-art-cost validation:** Test readable comic-like/stylized 3D treatment, camera/selection and lighting/shadows with cheap placeholders and native desktop viewing **before committing substantial custom art assets**. If 3D cannot meet the desired readability/aesthetic or shows meaningful measured complexity/performance problems, re-evaluate using the retained #13 2D proof and specific evidence; bring significant scope changes back for human approval.
+5. **Scope control:** No external simulation service, paid inference runtime, C#/TypeScript/IPC bridge, database, ECS, save format, free-roaming camera, gameplay rule, or permanent observation schema is selected by this ADR. Do not carry disposable prototype code wholesale into production.
 
-## Consequences and guardrails if approved
+**Approved by:** Creative Director, 2026-11-23 (ET). **Approval scope:** provisional engine/language and renderer default **plus separation of simulation, observation, world presentation and UI**. This sign-off **does not** constitute acceptance/merge of the documentation PR or approval of later mechanics.
+
+**Explicitly deferred creative questions:** How voluntary exits, eliminations, deaths and disappearances are handled; how multiple seasons credibly operate; and even whether the ostensible TV show is genuine or an elaborate lie told to contestants. These are exploration options, **not new confirmed fiction or mechanics**. The current reality-show premise (G-01) remains confirmed **unless changed through a separate Creative Director decision**. These questions need not hold up engine selection, engineering boundaries or the early technical skeleton; revisit before implementing dependent season/exit/narrative systems (including #7/P-04 and relevant planning).
+
+## Consequences and guardrails (provisional approval)
 
 - Native Godot scene/render/test tools can serve both the presentation and the headless GDScript test harness, reducing initially necessary tooling. The existing proof demonstrates **feasibility for the toy scenario**, not production throughput, renderer scalability or full security isolation.
-- A 3D fixed-camera workflow potentially eases overlapping floors and lighting, but demands careful cutaways, selectable room surfaces, readable markers and a measured asset pipeline. Maintain a small visibility regression fixture across future changes.
+- A 3D fixed-camera workflow potentially eases overlapping floors and lighting, but demands careful cutaways, selectable room surfaces, readable markers and a measured asset pipeline. Maintain a small visibility regression fixture across future changes. **Prove a stylized, comic-like 3D visual treatment and assess shadows in cheap assets before production art investment.**
 - Keep presentation from accessing private simulation dictionaries: observational data is a separate architectural boundary, with independent negative tests. GDScript underscore-prefixed fields provide no true access-control guarantee.
 - **Save/load is not proved.** Godot has documented `FileAccess`, `JSON` and binary variant serialization, but restoring seeds, event order, versioned snapshots and hidden-state separation needs its **own** design and tests. No save format is selected here.
 - **Export and performance remain unproved.** Godot has desktop export templates and an MIT engine license suitable for commercial distribution (with required license notices), but **no shipped package or performance benchmark exists**. Initial supported platforms and budgets require [#21](https://github.com/williamwhorton/The-Producer/issues/21); review future asset/plugin licenses separately.
@@ -86,7 +89,7 @@ Review both windows with `C` (cutaway/full walls), `F` (upper floor), `Space` (s
 
 ## Follow-up / decisions not implied
 
-1. **Creative Director approval gate:** evaluate the visual alternatives and explicitly approve/reject this ADR. If approved, update P-01 and `docs/technical-architecture.md` and close parent #4 only after recording the decision. Do **not** close #4 via this proposal PR.
+1. **Decision recorded:** the Creative Director approved the **provisional** engine and rendering approach on 2026-11-23 (ET). The requirements register and technical architecture now reflect that bounded decision. **Parent #4 closes only after the human accepts and merges this documentation PR**; the ADR does not approve game implementation by itself.
 2. **Issue #3:** independently propose and approve the private/observation/estimate contract. Until then, do not treat the #15 fixture projection as a permanent mechanics decision.
 3. **Issue #27:** a minimal production project, **after** the approved engine ADR and the separate #20 MVP scope gate. First verify native-GPU launch, fixed-angle room visibility/selection and a simple no-simulation presentation path.
 4. **Issue #5:** only unblock seeded contestant-decision harness after both the approved engine/language direction and approved #3 observation contract. Fixture `fear`, `intent` and random turn choices are **not** approved gameplay mechanics.
