@@ -37,14 +37,48 @@ For each new action, document these fields. Physical-event generation is separat
 | **Physical prerequisite / placement** | Which preinstalled device, adjusted structure or dossier-supported quick prop makes this possible, and where |
 | **Budget / slot cost** | Setup budget for installed equipment; **one fixed slot per valid minor overnight alteration**. **No new numeric prices or variable effort points here** |
 | **Eligibility / time** | When a player can select it; live trigger vs passive activation vs staged overnight result; a scene/room/target must support it |
+| **Temporal profile (NEW PROPOSAL)** | Whether a condition is **chronic/ongoing**, **acute/episodic** or an acute event with lasting aftermath. This is **independent of** setup/live/overnight action category |
+| **Duration, cessation and aftermath (NEW PROPOSAL)** | How long the physical condition remains and what persists when it stops (e.g., uncomfortable heat vs broken bulb vs remembered fright); no fixed balance numbers |
+| **Habituation / repetition (NEW PROPOSAL)** | How cue familiarity and prior explanations change later reactions; distinguish reduced surprise from continuing discomfort and recovery |
 | **World event** | Concrete change with **location, time, duration and perceivable cues** (sound, light, object placement). This occurs even if nobody notices |
 | **Witness test** | Which contestants can plausibly see/hear/find it, considering location, sight/hearing, activity and later discovery. Others do **not** automatically learn |
 | **Personal interpretation** | Contestant-specific appraisal of the cue based on prior evidence, traits, relationships, **known or private personal associations**, context and explanations |
 | **Possible private effects** | Candidate changes to **momentary distress**, **belief that a haunting is real**, **suspicion of human staging**, and **salient memory**. Values/signs are **not** fixed by action identity |
 | **Autonomous follow-up** | Individual may investigate, avoid, seek company, tell someone, rationalize, ignore or react otherwise; a producer choice does **not** choose the response |
 | **Producer-facing evidence** | Show **the producer's own action, visible world changes, source-grounded movement/behavior, and attended dialogue only**; never reveal raw private numerical beliefs |
-| **Repetition / persistence** | Cues and their memory may alter future reactions: repeated ordinary explanations can normalize, pattern-based discovery can raise staging suspicion, repeated fear can compound — **all proposed** |
+| **Repetition / persistence** | Cues and their memory may alter future reactions: repeated ordinary explanations can normalize **surprise**, but ongoing discomfort can remain; patterns may alter belief in ghosts or human staging, and later recovery can be gradual — **all proposed** |
 | **Counterexamples / tests** | A no-witness event, different witnesses with different appraisals, repeated uses, missing prerequisite, no dossier hook, delayed discoveries and observation non-leakage |
+
+## Temporal effect profiles, baseline stress and diminishing returns [NEW PROPOSAL — Creative Director exploration]
+
+The Creative Director proposes a distinct classification of **chronic** and **acute** effects, with diminishing returns. **This is orthogonal to producer action categories:** a pre-contest installation can produce an ongoing condition, recurrent ambient cues or an acute remotely triggered event. A staged object can persist in the world but cause an acute **discovery** when a contestant first notices it.
+
+| Candidate example | Temporal role | Physical effect | Proposed mechanics and limits |
+| --- | --- | --- | --- |
+| **Creaky floorboards (P1)** | **Chronic atmospheric source** emitting individual creaks when walked on | Repeated localized sound under actual footfalls | Ambience and uncertainty at first; **habituation to a recognizable, repeatedly explained cue** reduces its ability to startle. A new context or seemingly source-less sound may still matter |
+| **Uncomfortably high or low temperature (NEW)** | **Sustained chronic discomfort** from preinstalled thermostat/controller | Room temperature remains uncomfortable until changed | **Baseline stress/discomfort accumulates or remains elevated** while exposure persists; adaptation may reduce *surprise* without eliminating heat/cold strain. Relief/recovery afterward is a distinct question |
+| **Lightbulb popping (NEW)** | **Acute shock with lasting physical aftermath** | A prepared bulb suddenly pops; light is lost and the bulb is spent | Startle and uncertainty for witnesses; room may remain dim, altering subsequent conditions. **A spent bulb cannot simply pop again** without a plausible replacement/reset |
+| **Unplugged house telephone ringing (NEW)** | **Acute, apparently impossible signal** | A plausible prepared battery-powered/internal ringer or hidden sound mechanism makes the **one shared house telephone** audibly ring despite visible disconnection | Surprise/uncertainty may affect nearby contestants. This is **a ringing event, not an actual phone call**, so does **not** imply remote speech, a transcript, or a new listening-focus source |
+| **Placed doll / relative's photograph (P4)** | **Persistent staged object, acute discovery** | An object remains in the room; discovery occurs later | One-time personal salience upon finding it, possible lingering discomfort/memory; repeated exposure may change interpretation |
+
+**Classification nuance:** A *chronic source* need not make noise continuously. Squeaky boards make **short sounds repeatedly**, collectively shaping ambience. Conversely, an *acute shock* can have durable material consequences (the bulb stays broken) or memory consequences. Do not make "chronic = loop continuously" and "acute = no aftereffects" engine assumptions.
+
+### Proposed minimal psychological dynamics — not equations or approved values
+
+1. **Background load:** a continuing condition (such as unpleasant heat or cold) can gradually raise or maintain baseline stress while experienced. Its contribution should **saturate** or otherwise be bounded rather than grow without limit. When the condition ends, recovery may take time.
+2. **Immediate shock:** an acute cue produces a possible short-lived startle/distress response **only for perceiving witnesses**, scaled conceptually by surprise, plausibility, personal relevance, prior evidence and current context. It then decays, though memory and beliefs may persist.
+3. **Habituation / diminishing returns:** reactions to a **familiar cue or explanation** can become smaller after repetition. This is **cue/context-specific**, not global immunity to fear or a universal per-click penalty. A fresh cue or changed context can still matter.
+4. **Chronic-to-acute interaction (candidate):** poor sleep, discomfort or an unsettled atmosphere could amplify sensitivity to a surprising event, but may also change investigative, social or withdrawal decisions. **No automatic stacking multiplier or fixed synergy is approved.**
+5. **Separate appraisal from burden:** an occupant may become accustomed to floorboard creaks while remaining physiologically stressed by constant overheating. Similarly, a loud unexplained pop might frighten one person and convince another that the electrical system is unsafe rather than haunted.
+6. **Consequences still need autonomous follow-up:** stress, beliefs, memory and possible behavior shifts are not producer-ordered. Chronic stress does **not** directly create a haunting-score payout without a separately approved supernatural progression rule.
+
+**Design recommendation [not selected]:** add a **temporal profile and per-contestant cue familiarity/ongoing exposure** to the proposed shared simulation pipeline, rather than separate scare-specific decay scripts. Use **at least one ongoing environmental condition** to test baseline load, **at least one repeatable cue** to test habituation, and **one discrete shock** to test decay and aftereffects.
+
+### Starter-list implications [OPEN, no automatic scope increase]
+
+The original P1–P4 are still **candidate actions**, not approved or replaced. The new temperature, popping bulb and unplugged-phone ring are **candidate examples** to compare—not three automatically added initial actions. **For the smallest convincing systems slice**, the Creative Director could keep P1 as the repeatable chronic atmosphere example, **substitute thermostat control for one live effect** to test sustained baseline stress, and use **either a popping bulb or a hidden-speaker/telephone sound** as an acute event, retaining dossier-based P4 to exercise deferred discovery. The precise 3–5 action shortlist should be chosen after this mechanical distinction is approved. These examples may also be represented as variants of existing equipment, where physically plausible.
+
+**Physical-world guardrails:** a lightbulb that has popped should leave a changed fixture state until legitimately repaired; a ringing unplugged phone needs a plausible preinstalled standalone ringing device and must not invent actual phone conversation content. No permanent discomfort or endless repeating noise should generate unbounded stress in the absence of sensible attenuation.
 
 ### Proposed common simulation pipeline
 
@@ -53,8 +87,10 @@ Producer Action or Prepared Passive Trigger
     -> Validate physical means, phase, location and slot/budget rules
     -> Create concrete WorldEvent(kind, location, time, cue tags, actor/source)
     -> Each contestant independently PERCEIVES or MISSES the event
-    -> If perceived, contestant creates local evidence/memory and APPRAISES it
-    -> Candidate private effects on distress, haunting belief, staging suspicion, memory
+    -> If chronic, track ongoing exposure and recovery; if acute, record witnessed shock
+    -> If perceived/experienced, appraise via context, personal relevance and cue familiarity
+    -> Candidate private effects on baseline stress, momentary startle, haunting belief,
+       staging suspicion, persistent memory (specific dimensions NOT APPROVED)
     -> Contestant's own goals/needs/relationships drive next actions
     -> Producer sees only permitted source-grounded observations and attended speech
 ```
@@ -98,14 +134,18 @@ Producer Action or Prepared Passive Trigger
 3. **Distinct perceptions:** A contestant sees P3 from within the room while another elsewhere misses it. Another contestant may later hear a witnessed claim, not receive the full private event retroactively.
 4. **Same event, different appraisals:** One witness becomes more inclined toward ghosts, another toward human staging, a third investigates or ignores it. **The game chooses** using private evidence/personality.
 5. **Overnight hook and no-hook:** A cast with a known doll phobia has a candidate targeted P4; a contestant without a known exploitable background has **no fabricated personal prop action**. Staging succeeds without stealth; discovery/reaction may be delayed.
-6. **Repeat exposures:** A repeated creak may normalize or provoke a mundane explanation; effects do not blindly add identical distress every tick.
-7. **Observation firewall:** The player sees installed devices and authorized house observations, but **does not see inner emotions, private memories, unobserved conversation text or unattended phone words**. Source-grounded observed speech remains available only when actually attended, under ADR-0005.
-8. **Reproducibility:** A seeded simulation plus the same action schedule produces the same event/witness/behavior trace in headless developer tests. Actual GDScript implementation and passing test evidence belong to a later approved issue.
+6. **Repeat exposures:** A repeatedly explained floorboard creak may normalize; do not blindly add identical fright each time. Moving the trigger to an unexpected context may remain unsettling. Habituation is cue-specific, not global fear immunity.
+7. **Persistent discomfort vs habituation:** In a thermostat test scenario, prolonged heat/cold sustains a bounded discomfort load even when occupants stop being surprised by the temperature. Restoring comfort begins recovery rather than immediately erasing all consequences.
+8. **Acute shock and aftermath:** A prepared bulb popping creates a discrete witnessed event and a persistent broken/darkened fixture; it cannot be triggered indefinitely on the same bulb. An unplugged telephone ringing is a sound cue with plausible installed cause, **not an attended telephone call or authorized remote-side speech**.
+9. **Contextual interaction:** The same acute noise might matter differently when the witness is already uncomfortable, versus calm, without a fixed scripted emotional result.
+10. **Observation firewall:** The player sees installed devices and authorized house observations, but **does not see inner emotions, private memories, unobserved conversation text or unattended phone words**. Source-grounded observed speech remains available only when actually attended, under ADR-0005.
+11. **Reproducibility:** A seeded simulation plus the same action schedule produces the same event/witness/behavior trace in headless developer tests. Actual GDScript implementation and passing test evidence belong to a later approved issue.
 
 ## Remaining Creative Director decisions
 
 - **Approve/modify the starting action set:** **three vs four** (or replace a representative action). Which action is useful for demonstrating the earliest live timing challenge?
-- **Approve/modify the shared pipeline:** particularly which **minimal private dimensions** to model first; whether momentary distress, haunting belief and staging suspicion need distinct variables from the outset.
+- **Decide chronic/acute as a first-class temporal property and whether per-cue habituation is required in the initial prototype.** Distinguish ongoing baseline stress from short-lived startle without a global fear immunity meter; decide whether a thermostat, popped bulb or unplugged-phone ring should substitute for any P1–P4 example.
+- **Approve/modify the shared pipeline:** particularly which **minimal private dimensions** to model first; whether baseline discomfort, momentary distress, haunting belief, staging suspicion and event memory need distinct representations from the outset.
 - Decide **A-11**: guaranteed meaningful impact for offered P4 choices, or only a strong contextual likelihood; no forced fear behavior.
 - Define the **first observable reactions** for prototype testing. Exact weights, cooldowns and effects on haunting persistence remain OPEN.
 - Resource numbers, equipment purchase rules, the flat nightly **number**, nightly selection windows, general time controls (#17), prototype room/cast count (#20), UI presentation (#26) remain OPEN.
