@@ -20,6 +20,13 @@ A reality television competition places contestants in a supposedly haunted hous
 - Requiring at least one surviving contestant is a favored possibility, **not yet a final rule** [PROPOSED].
 - The public-facing fate of contestants who leave, die, or disappear must be narratively credible; the mechanism is [OPEN].
 
+## Visual and tonal reference direction [CREATIVE DIRECTION; detailed style OPEN]
+
+- **References:** *Darkest Dungeon* and *Cult of the Lamb* as broad examples of strong graphic silhouettes, stylized surfaces, controlled lighting and horror contrasted with appealing, readable imagery. Do not copy their assets, character designs or compositions.
+- **Rendering preference:** start with fixed-angle 3D orthographic (provisional ADR-0002), aiming to keep the 2D spike's clean, comic-like quality while gaining atmospheric light and shadow; preserve a 2D fallback before major art investment. Specific shaders, palette, models and rendering techniques are not selected.
+- **Emotional balance:** stylization gives the player enough imaginative distance to inhabit a morally troubling producer role, but the experience must remain **psychological/supernatural horror**, not a cheerful joke about contestants' suffering. Resist both unrelenting graphic realism and excessively cute or flippant presentation.
+- **Validation:** cheaply test a familiar/ordinary room and a threatening version of that same room, including lighting, graphic outlines, zoom-scale legibility and visible character/room information. Avoid committing expensive art resources until that direction is reviewed. Final art/audio/content boundaries belong to [Issue #22](https://github.com/williamwhorton/The-Producer/issues/22).
+
 ## Experience pillars
 1. **Manipulation, not omnipotence [CONFIRMED]:** create circumstances; people and entities decide how to respond.
 2. **Horror through contrast [CONFIRMED]:** normal social life and occasional humor amplify genuine dread.
@@ -32,7 +39,7 @@ A reality television competition places contestants in a supposedly haunted hous
 - No requirement for LLM-driven NPCs. Prefer testable simulated behavior unless proven otherwise [PROPOSED].
 - Do not make inherited artifacts prerequisites for success [CONFIRMED].
 - Do not reveal exact hidden contestant state through normal player UI [CONFIRMED].
-- No final title, engine, art pipeline, monetization or target platforms selected [OPEN].
+- The engine/rendering direction is **provisionally approved** in ADR-0002; no final title, detailed art pipeline, monetization or target platforms have been selected [OPEN].
 
 ## Season outcomes and stakes
 - **Persistent haunting [CONFIRMED objective]:** mere energy accumulation is not sufficient; the location must remain haunted independently of the production's ongoing intervention. The precise test for persistence is OPEN.
