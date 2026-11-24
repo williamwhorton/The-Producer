@@ -139,6 +139,43 @@ def review_verdict(log: str) -> str:
     return matches[0]
 
 
+def verify_checkout(cwd: Path, *, expected_branch: str | None = None,
+                    expected_sha: str | None = None) -> None:
+    """Fail closed before an agent starts on an unintended checkout.
+
+    Git's actual worktree root/branch are authoritative, not a parent session,
+    the Git common directory, the project label or the LLM's own claims.
+    """
+    cwd = cwd.resolve()
+    actual_root = Path(run_cmd(["git", "rev-parse", "--show-toplevel"], cwd)).resolve()
+    if actual_root != cwd:
+        raise Blocked(f"Agent checkout mismatch: expected {cwd}, Git reports {actual_root}.")
+    actual_branch = run_cmd(["git", "branch", "--show-current"], cwd)
+    if expected_branch is not None and actual_branch != expected_branch:
+        raise Blocked(f"Agent branch mismatch in {cwd}: expected {expected_branch!r}, "
+                      f"got {actual_branch!r}.")
+    if expected_sha is not None:
+        if actual_branch:
+            raise Blocked(f"Reviewer must be detached at {expected_sha}; "
+                          f"found branch {actual_branch!r} in {cwd}.")
+        actual_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd)
+        if actual_sha != expected_sha:
+            raise Blocked(f"Reviewer SHA mismatch in {cwd}: expected {expected_sha}, "
+                          f"got {actual_sha}.")
+
+
+def agent_environment(cwd: Path) -> dict[str, str]:
+    """Keep process cwd and PWD consistent when launching OpenCode.
+
+    Some OpenCode run versions prefer inherited PWD over the child process cwd.
+    Python's Popen(cwd=...) does not rewrite PWD; without this, a process
+    started in the main checkout may bind its session back to main.
+    """
+    env = os.environ.copy()
+    env["PWD"] = str(cwd.resolve())
+    return env
+
+
 def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
     """Run a fresh CLI session, stream its output, and bound its process group.
 
@@ -146,13 +183,14 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
     An OpenCode permission interaction unavailable in CLI mode will time out and
     block the run, rather than receiving an unsafe '--auto' override.
     """
+    cwd = cwd.resolve()
     agent_name = argv[argv.index("--agent") + 1] if "--agent" in argv else argv[0]
     print(f"Starting {agent_name} in {cwd}. Transcript: {log_path}", flush=True)
     with log_path.open("wb") as log:
         try:
-            process = subprocess.Popen(argv, cwd=cwd, stdin=None,
-                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                       start_new_session=True)
+            process = subprocess.Popen(argv, cwd=cwd, env=agent_environment(cwd),
+                                       stdin=None, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
         except OSError as exc:
             raise Blocked(f"Cannot start OpenCode: {exc}") from exc
         def stream() -> None:
@@ -208,9 +246,14 @@ def write_state(path: Path, **fields: object) -> None:
     tmp.replace(path)
 
 
-def review_prompt(issue: int, pr: dict) -> str:
-    return (f"Independently review PR #{pr['number']} for Issue #{issue} at exact "
-            f"commit {pr['headRefOid']} in {REPOSITORY}. Read AGENTS.md, the issue "
+def review_prompt(issue: int, pr: dict, worktree: Path) -> str:
+    return (f"Independently review PR #{pr['number']} for Issue #{issue} in "
+            f"worktree {worktree.resolve()} at exact "
+            f"commit {pr['headRefOid']} in {REPOSITORY}. BEFORE reviewing, verify "
+            "the tool's pwd and Git worktree root match your assigned current "
+            "directory, that HEAD is detached at the exact commit, and do not "
+            "switch to the main checkout. If mismatched, stop with "
+            "REVIEW_VERDICT: UNABLE_TO_VERIFY. Read AGENTS.md, the issue "
             "and authoritative parent requirements; inspect actual code and diff, "
             "reproduce appropriate tests and visual checks where possible. "
             "This is a read-only review; do not edit files, commits, or GitHub state. "
@@ -221,10 +264,14 @@ def review_prompt(issue: int, pr: dict) -> str:
             "Provide evidence before the verdict line.")
 
 
-def developer_prompt(issue: int, branch: str) -> str:
-    return (f"Implement GitHub Issue #{issue} in {REPOSITORY} following AGENTS.md "
+def developer_prompt(issue: int, branch: str, worktree: Path) -> str:
+    return (f"Implement GitHub Issue #{issue} in {REPOSITORY}, worktree "
+            f"{worktree.resolve()}, following AGENTS.md "
             "and docs/agent-workflow.md. You are already in an isolated worktree "
-            f"on branch '{branch}' based on origin/main; preserve it. Verify the "
+            f"on branch '{branch}' based on origin/main; preserve it. BEFORE doing "
+            "any work, run 'pwd', 'git rev-parse --show-toplevel' and "
+            "'git branch --show-current'. If the worktree or branch is not "
+            "this exact assigned worktree/branch, STOP without edits. Verify the "
             "actual issue, all authoritative parent fixtures, and approval scope. "
             "Implement, execute real tests and GUI inspection where available, "
             "document actual evidence, push this branch and open one non-draft PR "
@@ -243,6 +290,8 @@ def correction_prompt(issue: int, pr: dict, review_text: str) -> str:
             "rerun appropriate tests, update the existing branch and PR evidence, "
             "and do not merge. Preserve or update the PR's ## Human Testing "
             "steps with accurate commands and expected results. "
+            "Before edits, independently verify pwd, Git worktree root, and "
+            "current branch match the assigned issue worktree; stop if not. "
             "If findings are incorrect, document concrete proof.\n\n"
             f"Independent review:\n{review_text[-18000:]}")
 
@@ -403,6 +452,53 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
     return removed, skipped
 
 
+def archive_blocked_run(repo: Path, issue: int, state_dir: Path) -> Path:
+    """Allow an explicitly authorized retry without discarding old audit logs.
+
+    Only an earlier blocked run with no PR and no surviving worktrees may be
+    archived. Uncommitted/active/unknown worktrees must be investigated rather
+    than overwritten by another agent.
+    """
+    state_file = state_dir / "state.json"
+    try:
+        previous = json.loads(state_file.read_text())
+    except (OSError, ValueError) as exc:
+        raise Blocked("Cannot inspect old run state; refusing automatic retry.") from exc
+    if (previous.get("issue") != issue or previous.get("phase") != "blocked"
+            or previous.get("pr")):
+        raise Blocked("Retry is only allowed for a blocked run with no PR.")
+    old_branch = previous.get("branch")
+    if isinstance(old_branch, str) and old_branch:
+        prior_prs = json_cmd(["gh", "pr", "list", "--repo", REPOSITORY,
+                             "--state", "all", "--head", old_branch,
+                             "--limit", "100", "--json", "number"], repo)
+        if not isinstance(prior_prs, list) or prior_prs:
+            raise Blocked("Previous branch has a GitHub PR or cannot be verified; "
+                          "do not duplicate that work.")
+    _, retained = cleanup_worktrees(repo, issue=issue)
+    if retained:
+        raise Blocked("Previous run still owns worktrees that could not be cleaned: "
+                      + "; ".join(retained))
+    registered = {x["path"] for x in registered_worktrees(repo)}
+    candidates = [previous.get("development_worktree"),
+                  previous.get("review_worktree")]
+    candidates += [x.get("path") for x in previous.get("review_worktrees", [])
+                   if isinstance(x, dict)]
+    for item in candidates:
+        if not isinstance(item, str):
+            continue
+        path = Path(item).resolve()
+        if path in registered or path.exists():
+            raise Blocked(f"Previous run worktree still exists: {path}")
+    archive = state_dir.with_name(
+        state_dir.name + "-history-" +
+        dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        + "-" + secrets.token_hex(3))
+    state_dir.rename(archive)
+    print(f"Preserved previous blocked run logs: {archive}", flush=True)
+    return archive
+
+
 def orchestrate(args: argparse.Namespace) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not repo.is_dir():
@@ -412,9 +508,10 @@ def orchestrate(args: argparse.Namespace) -> int:
     info = preflight(repo, issue, model)
     run_home = repo.parent / f".{repo.name}-agent-runs"
     state_dir = run_home / f"issue-{issue}"
-    if state_dir.exists():
+    if state_dir.exists() and not args.retry_blocked:
         raise Blocked(f"Existing run for Issue #{issue}: {state_dir}. "
-                      "Inspect its state/logs; manual recovery is required in v1.")
+                      "For a previous blocked run with no PR, use --retry-blocked "
+                      "with --approve-issue after inspecting its last error.")
     if args.dry_run:
         print(f"DRY RUN: would create a separate worktree from origin/{BASE_BRANCH}, "
               "launch OpenCode Build and Reviewer as fresh sessions, and leave PR unmerged.")
@@ -423,6 +520,10 @@ def orchestrate(args: argparse.Namespace) -> int:
     if not args.approve_issue:
         raise Blocked("Execution requires --approve-issue, explicitly authorizing "
                       "this open issue for the supervised pilot. Use --dry-run first.")
+    if args.retry_blocked:
+        if not state_dir.is_dir():
+            raise Blocked("--retry-blocked requires an existing blocked run state.")
+        archive_blocked_run(repo, issue, state_dir)
     run_cmd(["git", "fetch", "origin", BASE_BRANCH], repo, timeout=120)
     run_cmd(["git", "rev-parse", "--verify", f"origin/{BASE_BRANCH}"], repo)
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -439,9 +540,11 @@ def orchestrate(args: argparse.Namespace) -> int:
         run_cmd(["git", "worktree", "add", "-b", branch, str(dev),
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
-        prompt = developer_prompt(issue, branch)
+        verify_checkout(dev, expected_branch=branch)
+        prompt = developer_prompt(issue, branch, dev)
         run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
                    prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
+        verify_checkout(dev, expected_branch=branch)
         pr = pr_details(branch, issue, repo)
         write_state(state_file, phase="reviewing", pr=pr["url"], head_sha=pr["headRefOid"])
         for attempt in range(2):
@@ -459,9 +562,10 @@ def orchestrate(args: argparse.Namespace) -> int:
             write_state(state_file, phase="reviewing", review_worktree=str(review),
                         review_worktrees=history, review_attempt=attempt,
                         head_sha=actual_sha)
+            verify_checkout(review, expected_sha=actual_sha)
             review_text = run_agent(["opencode", "run", "--standalone", "--agent",
                                      "producer-reviewer", "--model", model,
-                                     review_prompt(issue, pr)], review,
+                                     review_prompt(issue, pr, review)], review,
                                     state_dir / f"review-{attempt}.log",
                                     args.timeout_minutes * 60)
             verdict = review_verdict(review_text)
@@ -481,9 +585,11 @@ def orchestrate(args: argparse.Namespace) -> int:
             if attempt:
                 raise Blocked("Independent review still requests changes after one correction cycle.")
             write_state(state_file, phase="correcting")
+            verify_checkout(dev, expected_branch=branch)
             run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
                        model, correction_prompt(issue, pr, review_text)], dev,
                       state_dir / "developer-1.log", args.timeout_minutes * 60)
+            verify_checkout(dev, expected_branch=branch)
             updated = pr_details(branch, issue, repo)
             if updated["number"] != pr["number"] or updated["headRefOid"] == pr["headRefOid"]:
                 raise Blocked("Correction did not update the same PR with a new commit.")
@@ -510,11 +616,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", help="explicit OpenAI model ID from OpenCode")
     parser.add_argument("--dry-run", action="store_true", help="preflight only; no writes or AI runs")
     parser.add_argument("--approve-issue", action="store_true", help="authorize this issue's execution")
+    parser.add_argument("--retry-blocked", action="store_true",
+                        help="archive a previous blocked run with no PR after safe cleanup")
     parser.add_argument("--timeout-minutes", type=int, default=60,
                         help="timeout per model session (default: 60)")
     args = parser.parse_args(argv)
     if args.cleanup_worktrees:
-        if args.issue is not None or args.model or args.dry_run or args.approve_issue:
+        if args.issue is not None or args.model or args.dry_run or args.approve_issue or args.retry_blocked:
             parser.error("--cleanup-worktrees takes no issue/model/approval arguments")
         try:
             repo = Path(args.repo).expanduser().resolve()
@@ -529,6 +637,8 @@ def main(argv: list[str] | None = None) -> int:
         except Blocked as exc:
             print(f"BLOCKED: {exc}", file=sys.stderr)
             return 2
+    if args.retry_blocked and args.dry_run:
+        parser.error("--retry-blocked must not be combined with --dry-run")
     if args.issue is None or args.issue < 1 or not args.model or not 1 <= args.timeout_minutes <= 180:
         parser.error("provide ISSUE and --model; timeout must be 1–180 minutes")
     try:

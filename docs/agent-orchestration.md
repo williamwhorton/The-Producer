@@ -45,6 +45,24 @@ godot --path "$PWD/spikes/issue-4-3d"
 
 No issue branch checkout or separate Godot worktree is needed.
 
+## Correct worktree startup and safe retry after a blocked run
+
+**Root cause addressed:** Python's `subprocess.Popen(cwd=...)` changes the launched process's working directory but does **not** rewrite the inherited `PWD` environment variable. Some OpenCode `run` versions prefer `PWD` to process cwd and can therefore initialize a new session in the primary checkout on `main`, even though the runner launched the CLI for a sibling worktree. The runner now sets **both the child cwd and `PWD` to the same resolved worktree path**, and checks Git's actual top-level directory and branch before and after Build, before correction, and verifies the Reviewer's detached HEAD matches the exact PR commit. Agent instructions also demand an independent startup identity check and stop rather than change files on an unexpected branch.
+
+**Recovering the previously blocked Issue #15 run:** Once this change is merged and you have confirmed Issue #15 is still approved and no implementation PR exists, run the standard supervised assignment with `--retry-blocked`:
+
+```sh
+cd ~/Projects/The-Producer
+git switch main
+git pull --ff-only
+python3 -m unittest discover -s tests -p 'test_orchestrate.py' -v
+python3 tools/orchestrate.py 15 --model 'openai/YOUR-VERIFIED-MODEL#high' --approve-issue --retry-blocked
+```
+
+Replace the model placeholder with the **exact** working ChatGPT-connected model ID from `opencode models`. The retry flag only applies if the previous state is explicitly **blocked with no PR**. It safely attempts cleanup of old inactive worktrees, refuses any old worktree with changes or unpreserved commits, archives previous state/transcripts instead of deleting them, then starts a fresh branch/worktree and fresh Build session. If a run is still active, has a PR, or has an unsafe checkout, it refuses to retry. Do **not** delete state files, permit cross-directory access, or disable approval prompts to work around the problem.
+
+The fix has **automated regression tests** for a stale parent `PWD`, wrong worktree/branch, exact detached reviewer SHA and conservative blocked-run recovery. A real OpenCode 2.4.1 execution on the Creative Director's computer is still necessary to validate the provider/session behavior; the Python test cannot prove OpenCode itself has no other worktree bugs.
+
 ## Supervised runner: commands and guardrails
 
 The initial runner is standard-library Python 3 (no pip dependencies). From the main checkout **after this PR merges**:
