@@ -110,6 +110,20 @@ The central failure mode to avoid is turning early levels into “you needed a b
 - Quick nonstructural staging is a **confirmed intervention category**; **valid selected changes are carried out unseen as a design assumption**. No stealth interface or caught-in-the-act failure roll. This does **not** approve unlimited selections or structural changes during the contest. Structural/setup work cannot be treated as a quick alteration.
 - **Budget as a preparation constraint and timing as the principal early/lower-difficulty challenge are approved design directions**, but exact costs, gear restrictions, severity, cooldowns, difficulty scaling, initial effects, asset fidelity, implementation, scenario generation, time controls and player tool UX are NOT approved. No implementation test was executed for this design decision.
 
+## Nightly minor-alteration limits — three alternatives [PROPOSED; no selection yet]
+
+The Creative Director identified **three candidate ways** to constrain quick, nonstructural overnight alterations. **None has been approved as the final rule.** All assume the previously approved rule: **valid selected staging is carried out unseen**, without stealth minigames or caught-in-the-act checks. A contestant's **later interpretation** of the staged result is distinct from detecting the producer performing the act.
+
+| Candidate | What limits action | Benefit | Problem / design risk |
+| --- | --- | --- | --- |
+| **1. Escalating suspicion / soft cap** | No simple hard quota; many or conspicuous **discoveries in proximity** might provoke skepticism about staging | Emergent risk/reward tied to effects on contestants, potentially supports higher skill levels | Counting incidents alone is insufficient: frequent apparent hauntings can also increase **belief in genuine ghosts**, not automatically suspicion of producer wrongdoing; must respond to patterns, explanations and contestant beliefs |
+| **2. Flat per-night count** | A limited number of qualifying changes each night | Very clear, cheap to prototype and balance; keeps early challenge about **which** intervention to select and **when** to use live effects | Treats all prank-like changes as equivalent; arbitrary limit might feel artificial |
+| **3. Per-action time/effort cost** | A finite **abstract nightly effort allowance**, with larger changes consuming more | Physically plausible differences between small and elaborate interventions; room for loadout variety | Adds bookkeeping and balancing; risks displacing the game's early **live timing** focus; do not translate into stealth traversal or real-time countdown by default |
+
+**Architect recommendation (not human approval):** Begin the first vertical slice with **a small flat limit** (#2) as a transparent capacity constraint; independently allow contestants to become suspicious based on **what evidence they notice and how they interpret it**, *not* by automatically converting each staged effect into a producer-exposure point. Evaluate #3 as a later refinement if different interventions need meaningfully different costs, and #1 as a more systemic alternative when there is a credible evidence/suspicion model.
+
+**Critical distinction:** fear, belief in a real haunting, and suspicion of human staging need not move together (G-06; candidate S-02). A cluster of apparent disturbances could make one contestant more convinced of ghosts, and another suspicious of a prank. The producer still succeeds at performing allowed staging unseen. Whether an intervention is **eligible**, how many are allowed and when those choices are presented are separate questions. This proposal does not set a fixed quota, a numeric time budget, free actions, an exposure formula or a decided difficulty-scaling mechanic.
+
 ## Decisions still needed in #16
 
 1. Select the **first tiny action vocabulary** for a vertical slice: what prepared features and triggered interventions make the essential observe → stage → react → adapt loop legible?
