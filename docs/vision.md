@@ -30,6 +30,14 @@ A deceptive residential competition lures contestants into a supposedly haunted 
 
 These choices are documented in [ADR-0005](decisions/ADR-0005-house-surveillance-and-communications.md) and refine the approved [ADR-0004](decisions/ADR-0004-producer-observation-boundary.md) source-grounded observation contract: house cameras/audio are real producer-authorized sources; unseen events outside the house and private internal states are not automatically knowable. **This approves observations, not player intervention powers or specific implementation.**
 
+## Producer preparations and practical disturbances [CONFIRMED DIRECTION; MECHANICS OPEN — #16]
+
+The producer has **access to the house before contestants arrive** and can **prepare the environment or install devices** for later effects. Manufactured scares must be plausible within the game's fiction, arising from prepared physical mechanisms, props, deliberate alterations or other justified methods; they are not unexplained *player-created magic*. The repertoire is intentionally **not an exhaustive fixed list**.
+
+**Examples for future design, not individually approved actions:** squeaky floorboards, creepy dolls, remotely controllable thermostat, hidden-speaker noises, window-rattling effects, an unoccupied piano playing, and flickering lights. A seemingly inexplicable **bloody knife appearing on a table overnight** is an example of a staged change. **Holographic/projection-based ghosts** are an optional, more advanced *candidate*, not a confirmed device.
+
+**Covert overnight entry [PROPOSED]:** The producer *might* be able to enter the house unseen at some point each night to make minor changes. This is not yet an approved nightly action, access guarantee or safe route; timing, limits and discovery risk are OPEN. The boundaries between pre-contest setup, remote triggers and later covert changes are documented in [ADR-0006](decisions/ADR-0006-producer-preparation-and-practical-effects.md), which recommends but does not finally select a lightweight prepared-capabilities model. What affects fear, suspicion, investigation and autonomy follows from contestant simulation—not from direct player control.
+
 ## Original story seed [SOURCE MATERIAL — MECHANICS PROPOSED]
 
 The Creative Director's earlier fiction notes inspired the approved deceptive-competition premise. The following are **candidate scenario elements**, not rules authorized for implementation:
