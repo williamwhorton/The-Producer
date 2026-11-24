@@ -498,7 +498,7 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
             run_cmd(["git", "worktree", "remove", str(path)], repo, timeout=120)
             removed += 1
             print(f"CLEANED: {path}", flush=True)
-        except Blocked as exc:
+        except (Blocked, OSError) as exc:
             skipped.append(f"{path}: {exc}")
             print(f"RETAINED: {path} ({exc})", flush=True)
     print(f"Worktree cleanup: {removed} removed, {len(skipped)} retained.", flush=True)
@@ -634,7 +634,9 @@ def orchestrate(args: argparse.Namespace) -> int:
                 print("Human visual acceptance and merge remain required.")
                 return 0
             if verdict == "UNABLE_TO_VERIFY":
-                raise Blocked("Independent reviewer could not verify the PR; see logs.")
+                raise Blocked("Independent reviewer could not verify the PR; "
+                              f"inspect {state_dir / f'review-{attempt}.log'} for the "
+                              "specific reason. Do not rerun development; PR remains open.")
             if attempt:
                 raise Blocked("Independent review still requests changes after one correction cycle.")
             write_state(state_file, phase="correcting")
