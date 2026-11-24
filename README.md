@@ -12,6 +12,8 @@ An isometric psychological-horror management sandbox about staging **deceptive r
 3. Separate CONFIRMED decisions from PROPOSED mechanics and OPEN questions.
 4. Work from an approved GitHub issue on a branch; provide tests and an independent review before proposing a merge.
 
+The [production Godot project](game/README.md) has launch instructions and a smoke test.
+
 ## Delivery roadmap
 The [MVP-to-release delivery plan](docs/mvp-delivery-plan.md) maps GitHub issues from design decisions and prototypes to a playable, tested, distributable MVP. The [high-level roadmap](docs/roadmap.md) summarizes phases. Creative Director decision stories can be Ready alongside agent work; Ready does not settle unapproved mechanics.
 
@@ -22,14 +24,14 @@ The [MVP-to-release delivery plan](docs/mvp-delivery-plan.md) maps GitHub issues
 - [Seasons and artifacts](docs/systems/seasons-and-artifacts.md)
 - [Season outcomes and continuity](docs/systems/season-outcomes-and-continuity.md)
 - [Technical architecture constraints](docs/technical-architecture.md)
-- [Issue #4 engine/rendering comparison](docs/issue-4-architecture-evaluation.md) — proposed recommendation, not approved
-- [ADR-0002 engine/presentation proposal](docs/decisions/ADR-0002-engine-and-presentation-approach.md) — pending Creative Director decision
+- [Issue #4 engine/rendering comparison](docs/issue-4-architecture-evaluation.md) — disposable proofs
+- [ADR-0002 engine/presentation decision](docs/decisions/ADR-0002-engine-and-presentation-approach.md) — provisionally approved
 - [Roadmap](docs/roadmap.md)
 - [Issue types, field visibility and priority conventions](docs/project-board-setup.md)
 - [Open decisions](docs/open-questions.md)
 - [ADR template](docs/decisions/ADR-template.md)
 
 ## Development with AI agents
-The project uses **terminal-based OpenCode CLI on Bazzite** and a ChatGPT-connected **cloud coding model**. OpenCode's standard **Build** agent is the validated implementation path; independent read-only review, executable validation, and human acceptance remain required. Local LM Studio models are historical experiments, not the default. The production engine and language have **not** been selected.
+The project uses **terminal-based OpenCode CLI on Bazzite** and a ChatGPT-connected **cloud coding model**. OpenCode's standard **Build** agent is the validated implementation path; independent read-only review, executable validation, and human acceptance remain required. Local LM Studio models are historical experiments, not the default.
 
 See the [agent workflow](docs/agent-workflow.md), [cloud-first decision (ADR-0003)](docs/decisions/ADR-0003-cloud-first-agent-development.md), and [Lead orchestration options](docs/agent-orchestration.md). A **supervised single-issue CLI runner** is now available at [`tools/orchestrate.py`](tools/orchestrate.py), with instructions in the orchestration guide. Its unit tests pass; an actual Build → Reviewer run on the Creative Director's OpenCode 2.4.1 installation is still pending. **Board-driven dispatch is not yet implemented.** Completed agent worktrees are now cleaned automatically when safe; to reconcile earlier run worktrees once after updating main, use `python3 tools/orchestrate.py --cleanup-worktrees`.

@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://world/dollhouse.gd" id="1_world"]
+
+[sub_resource type="Environment" id="Environment_house"]
+ambient_light_source = 2
+ambient_light_color = Color(0.77, 0.82, 0.96, 1)
+ambient_light_energy = 0.65
+
+[node name="Dollhouse" type="Node3D"]
+script = ExtResource("1_world")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(10, 10, 12)
+projection = 1
+current = true
+size = 11.5
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_house")
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.92, -0.52, 0)
+light_color = Color(1, 0.87, 0.72, 1)
+light_energy = 1.1
+shadow_enabled = true
+directional_shadow_mode = 0
+directional_shadow_max_distance = 32.0
