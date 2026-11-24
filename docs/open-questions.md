@@ -13,8 +13,10 @@
 
 - Proposed recruitment: a substantial cash prize and shared house ownership; illustrative notes specify $250,000 and a deed share.
 - Proposed removal: overnight-rule violations may cause mysterious “removal,” discovered through notes or incomplete witnesses; **never equate removal with mandatory death without approval**.
-- Proposed outside-world element: contestants visit town during the day and help generate local haunted-house folklore; some townspeople may be plants.
+- Proposed outside-world element: contestants visit town during the day and help generate local haunted-house folklore; some townspeople may be plants. **Presentation candidate:** pause-and-resolve static-image/text vignettes (Paradox-style event windows or *Rogue Trader* narrative interludes), with player choices when meaningful and information-only events otherwise. No fully explorable town is assumed.
 - Proposed dramatic endpoints: a contestant uncovers the operation or is implicated in others' fates; diary/found-document framing is optional. No authored ending, required survivor, everyone-dies result, or murder threshold has been approved.
+
+**Off-site event presentation still OPEN:** Should narrated town events pause simulation time, and when should they be shown? Who sees the underlying event, which choices can the producer genuinely make, and what information is properly available through witnesses/staff/letters? Keep this at the UI/observation interface rather than embedding it into world rendering; evaluate under #26/#17/#3.
 
 ## Priority B — Important after initial prototype
 8. What creates a new supernatural entity and determines its drives?
