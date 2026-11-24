@@ -26,3 +26,7 @@ Producer may need to preserve an entity from contestant banishment or prevent au
 
 ## Open decisions
 Specific drives, capabilities, countermeasures and extinction conditions (#6); numerical emergence and anchoring rules; persistence evaluation (#7). Keep the first playable implementation small.
+## Minimal autonomous behavior [CONFIRMED direction #6]
+Entities pursue their own simple motivations; fear is a possible consequence, not a universal goal. Individual capabilities and circumstances constrain choices. Reuse world events and contestant appraisal rather than arbitrary scares. Contestants independently investigate, avoid and attempt banishment; success depends on circumstances, not a scripted outcome. One entity and one countermeasure suffice for the first playable prototype. Specific drives, abilities, rituals and balancing are deferred to implementation/playtesting.
+
+Candidate headless scenario: a territorial entity disturbs an occupied room, frustrating the producer's retention goal. Contestants observe repeated disturbances, avoid the room or investigate, and an eligible contestant attempts a countermeasure; defined conditions permit success or failure without a scripted sequence. Test causal action selection, independent action, shared perception pipeline and both countermeasure outcomes. Territoriality and exact ritual are illustrative, not mandatory mechanics.
