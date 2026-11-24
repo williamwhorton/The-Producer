@@ -6,6 +6,15 @@ The player orchestrates a deceptive residential prize competition whose conceale
 ## Primary loop [PROPOSED]
 Observe partial evidence -> plan production interventions -> stage scares/manipulations -> watch autonomous contestant and entity responses -> assess fear, suspicion, retention and psychic yield -> adapt/contain consequences -> invest in supernatural development.
 
+## Producer action families [CONFIRMED direction; exact toolkit OPEN]
+
+- **Pre-contest house preparation:** the producer has time/access to arrange unsettling props, alter environmental conditions and install practical-effect devices before the contestants arrive. Candidate examples include squeaky floorboards, creepy dolls, a remote thermostat and hidden speakers.
+- **During-contest prepared effects:** the producer can trigger **physically supported** disturbances—for example, unsettling sound effects, flickering lights, window rattles or an empty-room piano playing—**provided an appropriate practical means exists**. The mechanism, effect catalogue and action budget are not yet approved. The producer chooses the intervention; contestants choose their response.
+- **Potential overnight covert staging [PROPOSED, not approved]:** the producer could perhaps enter unseen to reposition props or create a disturbing discovery (e.g., a bloody knife appearing overnight). This needs specific access, timing, exposure and consequence rules; it is **not** a guaranteed daily free action.
+- **Further optional effects [PROPOSED]:** projected/holographic apparitions, subject to feasible fiction and an approved small art/effect scope. These are **manufactured illusions**, separate from genuinely autonomous supernatural manifestations.
+
+A small **prepared-capability + context-sensitive action** model is the recommended starting point, instead of either a magic scare menu or detailed cable-and-motor construction simulation. The Creative Director has approved the physical-plausibility/preparation direction, **not an exhaustive inventory, full mechanic or resource economy**. See [ADR-0006](decisions/ADR-0006-producer-preparation-and-practical-effects.md).
+
 ## Tension model [PROPOSED]
 - Fear may contribute to haunting formation, but may also trigger attempted withdrawal/escape, panic, investigation or defensive cooperation. Whether deaths or a minimum fear threshold are required remains OPEN.
 - Suspicion of **production wrongdoing** is distinct from belief in a **real haunting**.
