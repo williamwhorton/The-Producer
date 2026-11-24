@@ -14,6 +14,10 @@
 ## Candidate engine evaluation
 The three disposable Godot proofs are merged. The Creative Director **approved provisionally** the recommendation in [ADR-0002](decisions/ADR-0002-engine-and-presentation-approach.md): **Godot 4 + GDScript with fixed-angle 3D orthographic presentation**, retaining [the 2D comparison](issue-4-architecture-evaluation.md) as a viable early fallback. The target is the 2D proof's clean, comic-like legibility with 3D lighting/shadow potential; stylized 3D has **not yet been demonstrated**. P-01 is provisionally resolved. Keep simulation, observation/application interface, world rendering and player-facing UI separate so a renderer change does not demand a rewrite of game rules, while acknowledging art/selection/shader migration costs. A TypeScript simulation runtime or IPC service remains unsupported without demonstrated need and new approval. Headless toy simulation is verified; persistence, exports, native GPU performance and a production asset pipeline are not.
 
+## Visual production constraints (direction; not a final art pipeline)
+
+Use *Darkest Dungeon* and *Cult of the Lamb* as **high-level visual/tonal references**, not material to duplicate. Aim for a readable, graphic-novel/comic-like dollhouse through stylized 3D shading, intentional silhouettes and controllable pools of light/shadow. Keep suspense and human stakes serious; avoid both photorealistic brutality and overly cute, glib horror. Test graphic edges and shadows for shimmer/aliasing and usability at intended zoom before spending on assets. Lighting, materials, outlines, and camera belong to the **world renderer**, independently of gameplay simulation, observation rules and UI/HUD. Specific methods and production art/audio/content decisions remain #22's remit.
+
 ## Determinism [PROPOSED]
 Central seeded random stream(s), explicit tick/event ordering, stable serialization, and repeatable scenario fixtures. Test thousands of simulated ticks without graphics. Maintain causal event logs for agent debugging.
 
@@ -27,4 +31,4 @@ Separate private world state from observable production state. Player-facing vie
 Automated tests; static analysis where supported; scenario simulations; reviewer checks; reproducible builds; no silent requirement changes. Document actual command outputs and known limitations in PRs.
 
 ## Architecture decisions pending
-Engine/language; ECS vs conventional object model; save format; simulation tick rate; navigation/pathfinding; audio and asset tooling; CI platform and release targets.
+Engine/language and initial renderer are **provisionally decided in ADR-0002**; still pending: ECS vs conventional object model, save format, simulation tick rate, navigation/pathfinding, audio and asset tooling (#22), CI platform and release targets.
