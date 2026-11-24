@@ -40,7 +40,7 @@
 **Off-site event presentation still OPEN:** How should narrated town events be presented without automatic event-based pausing or omniscient alerts (#17)? Who sees the underlying event, which choices can the producer genuinely make, and what information is properly available through witnesses/staff/letters? Keep this at the UI/observation interface rather than embedding it into world rendering; evaluate under #26/#17/#3.
 
 ## Priority B — Important after initial prototype
-8. What creates a new supernatural entity and determines its drives?
+8. **Entity emergence (qualitative direction resolved #23):** energy, belief, imprints and bounded chance shape emergence; all genuine activity comes from entities and consumes no energy. Anchoring governs persistence. OPEN: minimal drives and countermeasures (#6), numerical rules and outcome evaluation (#7). See [approved design](issue-23-supernatural-escalation.md).
 9. What does it mean for the *house itself* to awaken?
 10. How are contestants authored or generated, and how do their reasons for staying vary?
 11. How do producers learn about private conspiracies without omniscience?
