@@ -49,6 +49,18 @@ No gameplay, actor movement, camera controls, or multi-floor behavior is added.
 
 ## Smoke checks
 
+From the repository root on Bazzite, with the pinned native `godot` above on
+`PATH`, run the same check as [GitHub Actions](../.github/workflows/godot-headless.yml):
+
+```sh
+bash game/tests/headless.sh
+```
+
+CI verifies the official Linux x86_64 archive checksum before running this
+script on Ubuntu 24.04. The script checks the full engine version, keeps Godot's
+output visible, and fails on a nonzero exit, a 60-second command timeout, or a
+Godot error in the logs. It runs these three commands in order:
+
 ```sh
 godot --headless --path game --editor --import
 godot --headless --path game --quit-after 2
@@ -60,6 +72,9 @@ The last loads the configured main scene and checks the active orthographic
 camera, initial HUD, both floor picks, desk occlusion, background clearing and
 unknown room IDs. Expect exit 0 and
 `PASS: configured main scene, orthographic camera, room picking, and HUD`.
+This is the current production suite, not a simulation regression suite:
+`game/simulation/` has no runnable tests yet, and the disposable `spikes/` are
+not used as substitutes. Headless checks do not verify rendered output.
 To repeat the automated checks with graphics enabled, run
 `godot --path game --script res://tests/smoke.gd`.
 

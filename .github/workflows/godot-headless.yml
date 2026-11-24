@@ -1,0 +1,42 @@
+name: Godot headless checks
+
+on:
+  pull_request:
+    paths:
+      - 'game/**'
+      - '.github/workflows/godot-headless.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'game/**'
+      - '.github/workflows/godot-headless.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  headless:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Godot (Linux x86_64)
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          build=Godot_v4.7.2-stable_linux.x86_64
+          curl --fail --silent --show-error --location --retry 2 \
+            "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/$build.zip" \
+            --output "$build.zip"
+          printf '%s  %s.zip\n' \
+            cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4 "$build" \
+            | sha256sum --check
+          unzip -q "$build.zip"
+          mkdir -p godot-bin
+          install -m 0755 "$build" godot-bin/godot
+          printf '%s\n' "$RUNNER_TEMP/godot-bin" >> "$GITHUB_PATH"
+      - name: Import, boot and run production smoke suite
+        shell: bash
+        run: bash game/tests/headless.sh
