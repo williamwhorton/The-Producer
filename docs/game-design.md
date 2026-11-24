@@ -15,6 +15,12 @@ Observe partial evidence -> plan production interventions -> stage scares/manipu
 
 **Timing should be the primary challenge in early levels/lower difficulties [CONFIRMED direction]**: decide *when* to trigger a prepared effect, taking account of contestant location, behavior and competing observation opportunities. **Budget limits pre-contest setup [CONFIRMED]**, while **limited available equipment/loadouts [PROPOSED]** could add a secondary constraint. The reference is the *Orcs Must Die!* **prepare/position → active intervention** structure, **not** mandatory waves, combat or trap damage. Exact currencies, costs, reaction windows and difficulty scaling are OPEN. A small **prepared-capability + context-sensitive action** model is the recommended starting point, instead of either a magic scare menu or detailed cable-and-motor construction simulation. The Creative Director has approved the physical-plausibility/preparation direction, **not an exhaustive inventory, full mechanic or resource economy**. See [ADR-0006](decisions/ADR-0006-producer-preparation-and-practical-effects.md).
 
+## Personalized overnight options [CONFIRMED direction; hard outcome guarantee OPEN]
+
+Every contestant has **at least one significant personal fear or emotional association** involving an object, person, memory or idea. Available minor overnight alterations are **derived from these cast-specific hooks** rather than a generic scary-prop catalogue: a doll for someone afraid of dolls, or an unexpected photograph of a deceased relative for someone affected by that death. A trigger must be convertible into a plausible quick, nonstructural action to qualify for the nightly menu; more elaborate effects must be installed before the contest.
+
+The production may learn background information through casting or pre-contest research, but the exact dossier/knowledge UI is OPEN and must not expose current private thoughts under ADR-0004. The personal relevance makes impact plausible, but the hard guarantee of **significantly affecting at least one contestant** remains PROPOSED (A-11). Reactions are not preordained: grief, fear, anger, investigation, curiosity or skepticism can all follow from a targeted cue. See A-12 and ADR-0006.
+
 ## Tension model [PROPOSED]
 - Fear may contribute to haunting formation, but may also trigger attempted withdrawal/escape, panic, investigation or defensive cooperation. Whether deaths or a minimum fear threshold are required remains OPEN.
 - Suspicion of **production wrongdoing** is distinct from belief in a **real haunting**.
