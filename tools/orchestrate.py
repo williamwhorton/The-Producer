@@ -249,10 +249,17 @@ def write_state(path: Path, **fields: object) -> None:
 def review_prompt(issue: int, pr: dict, worktree: Path) -> str:
     return (f"Independently review PR #{pr['number']} for Issue #{issue} in "
             f"worktree {worktree.resolve()} at exact "
-            f"commit {pr['headRefOid']} in {REPOSITORY}. BEFORE reviewing, verify "
-            "the tool's pwd and Git worktree root match your assigned current "
-            "directory, that HEAD is detached at the exact commit, and do not "
-            "switch to the main checkout. If mismatched, stop with "
+            f"commit {pr['headRefOid']} in {REPOSITORY}. The Python runner has "
+            "already independently verified this worktree's Git root and "
+            "detached commit before launching you. Confirm with INDIVIDUAL "
+            "shell tool calls using EXACTLY these commands (each as its own "
+            "invocation): pwd ; git rev-parse --show-toplevel ; "
+            "git rev-parse HEAD ; git branch --show-current ; "
+            "git status --short --branch. The semicolons in this sentence "
+            "SEPARATE examples; NEVER send them together as a single command, "
+            "pipeline, script, or multi-line request. Do not use printf, "
+            "pwd -P, git symbolic-ref, or git remote -v in this preflight. "
+            "If the returned location/commit differs, stop with "
             "REVIEW_VERDICT: UNABLE_TO_VERIFY. Read AGENTS.md, the issue "
             "and authoritative parent requirements; inspect actual code and diff, "
             "reproduce appropriate tests and visual checks where possible. "
@@ -296,7 +303,7 @@ def correction_prompt(issue: int, pr: dict, review_text: str) -> str:
             f"Independent review:\n{review_text[-18000:]}")
 
 
-def preflight(repo: Path, issue: int, model: str) -> dict:
+def preflight(repo: Path, issue: int, model: str, *, allow_open_pr: bool = False) -> dict:
     for exe in ("git", "gh", "opencode"):
         if not shutil.which(exe):
             raise Blocked(f"Missing '{exe}' from PATH.")
@@ -323,7 +330,8 @@ def preflight(repo: Path, issue: int, model: str) -> dict:
     if "mode: primary" not in review_config or "effect: deny" not in review_config:
         raise Blocked("Reviewer profile not verified as primary with deny rules.")
     data = issue_details(issue, repo)
-    existing_prs(issue, repo)
+    if not allow_open_pr:
+        existing_prs(issue, repo)
     print(f"OpenCode {version}; issue #{issue}: {data['title']} ({data['url']})")
     print(f"Requested cloud model: {model}. Ensure it uses ChatGPT plan authentication.")
     return data
@@ -552,6 +560,92 @@ def archive_blocked_run(repo: Path, issue: int, state_dir: Path) -> Path:
     return archive
 
 
+def review_existing_pr(args: argparse.Namespace) -> int:
+    """Independent review of an existing PR, without restarting Build.
+
+    Explicit user invocation is the authorization for this read-only action.
+    The normal develop/review run for the issue may remain blocked or complete.
+    """
+    repo = Path(args.repo).expanduser().resolve()
+    if not repo.is_dir():
+        raise Blocked(f"Repository directory not found: {repo}")
+    model = require_model(args.model)
+    issue = args.issue
+    pr_number = args.review_pr
+    preflight(repo, issue, model, allow_open_pr=True)
+    overview = json_cmd(
+        ["gh", "pr", "view", str(pr_number), "--repo", REPOSITORY,
+         "--json", "number,headRefName,state"], repo)
+    if not isinstance(overview, dict) or overview.get("number") != pr_number:
+        raise Blocked("Cannot verify requested PR number.")
+    if overview.get("state") != "OPEN":
+        raise Blocked("Review-only mode requires an open PR.")
+    branch = overview.get("headRefName")
+    if not isinstance(branch, str) or not branch.startswith("agent/"):
+        raise Blocked("Review-only mode requires an agent/ issue branch.")
+    pr = pr_details(branch, issue, repo)
+    if pr["number"] != pr_number:
+        raise Blocked("PR branch resolves to a different PR; refusing review.")
+    if args.dry_run:
+        print(f"DRY RUN: would independently review {pr['url']} for Issue #{issue}, "
+              f"head {pr['headRefOid']}, using model {model}.")
+        print("No AI session, Git fetch, state file, or worktree created.")
+        return 0
+
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_id = f"{issue}-{stamp}-{secrets.token_hex(3)}"
+    review = repo.parent / f"{repo.name}-review-{run_id}-pr{pr_number}"
+    state_dir = (repo.parent / f".{repo.name}-agent-runs" /
+                 f"issue-{issue}-review-pr-{pr_number}-{stamp}-{secrets.token_hex(3)}")
+    state_dir.mkdir(parents=True, exist_ok=False)
+    state_file = state_dir / "state.json"
+    write_state(state_file, issue=issue, pr=pr["url"], head_sha=pr["headRefOid"],
+                model=model, phase="preparing_review", review_attempt=0)
+    try:
+        run_cmd(["git", "fetch", "origin", branch], repo, timeout=120)
+        sha = run_cmd(["git", "rev-parse", "FETCH_HEAD"], repo)
+        if sha != pr["headRefOid"]:
+            raise Blocked("PR head changed while preparing independent review.")
+        run_cmd(["git", "worktree", "add", "--detach", str(review), sha],
+                repo, timeout=120)
+        write_state(state_file, phase="reviewing", review_worktree=str(review),
+                    review_worktrees=[{"path": str(review), "sha": sha}])
+        verify_checkout(review, expected_sha=sha)
+        print(f"Fresh review transcript: {state_dir / 'review-0.log'}", flush=True)
+        output = run_agent(
+            ["opencode", "run", "--standalone", "--agent",
+             "producer-reviewer", "--model", model, review_prompt(issue, pr, review)],
+            review, state_dir / "review-0.log", args.timeout_minutes * 60)
+        verdict = review_verdict(output)
+        current = pr_details(branch, issue, repo)
+        if current["headRefOid"] != sha:
+            raise Blocked("PR head changed during independent review; verdict is stale.")
+        write_state(state_file, last_verdict=verdict)
+        if verdict == "APPROVE":
+            write_state(state_file, phase="ready_for_human_acceptance")
+            print(f"REVIEWED: {pr['url']} at {sha}", flush=True)
+            print("Reviewer recommended APPROVE; human acceptance and merge "
+                  f"remain required. Transcript: {state_dir / 'review-0.log'}",
+                  flush=True)
+            return 0
+        if verdict == "REQUEST_CHANGES":
+            write_state(state_file, phase="changes_requested")
+            raise Blocked("Reviewer requested changes to existing PR; do not "
+                          f"restart development. Inspect {state_dir / 'review-0.log'}")
+        raise Blocked("Reviewer could not independently verify existing PR; "
+                      f"inspect {state_dir / 'review-0.log'}")
+    except Blocked as exc:
+        write_state(state_file, phase="blocked", reason=str(exc))
+        raise
+    finally:
+        try:
+            _, retained = cleanup_worktrees(repo)
+            write_state(state_file, cleanup_pending=retained)
+        except (Blocked, OSError) as exc:
+            print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
+            write_state(state_file, cleanup_pending=[str(exc)])
+
+
 def orchestrate(args: argparse.Namespace) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not repo.is_dir():
@@ -673,11 +767,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--approve-issue", action="store_true", help="authorize this issue's execution")
     parser.add_argument("--retry-blocked", action="store_true",
                         help="archive a previous blocked run with no PR after safe cleanup")
+    parser.add_argument("--review-pr", type=int, help="independently review an existing open PR without running Build")
     parser.add_argument("--timeout-minutes", type=int, default=60,
                         help="timeout per model session (default: 60)")
     args = parser.parse_args(argv)
     if args.cleanup_worktrees:
-        if args.issue is not None or args.model or args.dry_run or args.approve_issue or args.retry_blocked:
+        if (args.issue is not None or args.model or args.dry_run or
+                args.approve_issue or args.retry_blocked or args.review_pr is not None):
             parser.error("--cleanup-worktrees takes no issue/model/approval arguments")
         try:
             repo = Path(args.repo).expanduser().resolve()
@@ -696,8 +792,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--retry-blocked must not be combined with --dry-run")
     if args.issue is None or args.issue < 1 or not args.model or not 1 <= args.timeout_minutes <= 180:
         parser.error("provide ISSUE and --model; timeout must be 1–180 minutes")
+    if args.review_pr is not None and (args.review_pr < 1 or args.retry_blocked or args.approve_issue):
+        parser.error("--review-pr requires an open PR number and cannot perform development/retry")
     try:
-        return orchestrate(args)
+        return review_existing_pr(args) if args.review_pr is not None else orchestrate(args)
     except Blocked as exc:
         print(f"BLOCKED: {exc}", file=sys.stderr)
         return 2

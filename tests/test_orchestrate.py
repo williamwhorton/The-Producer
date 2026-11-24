@@ -281,6 +281,101 @@ class FlowTests(unittest.TestCase):
                 mod.orchestrate(self.args)
 
 
+
+class ReviewOnlyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name) / "The-Producer"
+        self.repo.mkdir()
+        self.args = argparse.Namespace(
+            issue=15, review_pr=79, repo=str(self.repo),
+            model="openai/gpt-6.2-sol", dry_run=False,
+            approve_issue=False, retry_blocked=False, timeout_minutes=2)
+        self.branch = "agent/issue-15-test"
+        self.sha = "a" * 40
+        self.pr = {**sample_pr(self.sha),
+                   "number": 79, "headRefName": self.branch,
+                   "url": "https://github.com/williamwhorton/The-Producer/pull/79"}
+        self.overview = {"number": 79, "headRefName": self.branch, "state": "OPEN"}
+
+    def test_existing_pr_is_reviewed_without_build_or_duplicate_development(self):
+        agent_calls = []
+        git_calls = []
+        def git(argv, cwd, **kwargs):
+            git_calls.append(argv)
+            return self.sha
+        def agent(argv, cwd, logfile, timeout):
+            agent_calls.append((argv, cwd, logfile))
+            return "Evidence checked.\nREVIEW_VERDICT: APPROVE"
+        with patch.object(mod, "preflight") as preflight, \
+             patch.object(mod, "json_cmd", return_value=self.overview), \
+             patch.object(mod, "pr_details", return_value=self.pr), \
+             patch.object(mod, "run_cmd", side_effect=git), \
+             patch.object(mod, "verify_checkout") as verify, \
+             patch.object(mod, "run_agent", side_effect=agent), \
+             patch.object(mod, "cleanup_worktrees", return_value=(1, [])) as cleanup:
+            self.assertEqual(mod.review_existing_pr(self.args), 0)
+        self.assertTrue(preflight.call_args.kwargs["allow_open_pr"])
+        self.assertEqual(len(agent_calls), 1)
+        command, checkout, transcript = agent_calls[0]
+        self.assertIn("producer-reviewer", command)
+        self.assertNotIn("build", command)
+        self.assertEqual(verify.call_args.kwargs["expected_sha"], self.sha)
+        self.assertIn(["git", "worktree", "add", "--detach", str(checkout), self.sha], git_calls)
+        self.assertNotIn("git worktree add -b", " ".join(" ".join(a) for a in git_calls))
+        self.assertTrue(cleanup.called)
+        self.assertIn("issue-15-review-pr-79-", str(transcript.parent))
+        state = json.loads((transcript.parent / "state.json").read_text())
+        self.assertEqual(state["phase"], "ready_for_human_acceptance")
+        self.assertEqual(state["head_sha"], self.sha)
+
+    def test_review_only_dry_run_creates_no_worktree_or_state(self):
+        self.args.dry_run = True
+        with patch.object(mod, "preflight"), \
+             patch.object(mod, "json_cmd", return_value=self.overview), \
+             patch.object(mod, "pr_details", return_value=self.pr), \
+             patch.object(mod, "run_agent") as agent, \
+             patch.object(mod, "run_cmd") as git:
+            self.assertEqual(mod.review_existing_pr(self.args), 0)
+        agent.assert_not_called()
+        git.assert_not_called()
+        self.assertFalse((self.repo.parent / ".The-Producer-agent-runs").exists())
+
+    def test_reviewer_unable_to_verify_leaves_pr_and_state(self):
+        with patch.object(mod, "preflight"), \
+             patch.object(mod, "json_cmd", return_value=self.overview), \
+             patch.object(mod, "pr_details", return_value=self.pr), \
+             patch.object(mod, "run_cmd", return_value=self.sha), \
+             patch.object(mod, "verify_checkout"), \
+             patch.object(mod, "run_agent",
+                          return_value="REVIEW_VERDICT: UNABLE_TO_VERIFY"), \
+             patch.object(mod, "cleanup_worktrees", return_value=(0, [])):
+            with self.assertRaisesRegex(mod.Blocked, "could not independently verify"):
+                mod.review_existing_pr(self.args)
+        folders = list((self.repo.parent / ".The-Producer-agent-runs").glob(
+            "issue-15-review-pr-79-*/state.json"))
+        self.assertEqual(len(folders), 1)
+        self.assertEqual(json.loads(folders[0].read_text())["phase"], "blocked")
+
+    def test_mismatched_pr_number_is_not_reviewed(self):
+        with patch.object(mod, "preflight"), \
+             patch.object(mod, "json_cmd", return_value=self.overview), \
+             patch.object(mod, "pr_details", return_value={**self.pr, "number": 80}), \
+             patch.object(mod, "run_agent") as agent:
+            with self.assertRaisesRegex(mod.Blocked, "different PR"):
+                mod.review_existing_pr(self.args)
+        agent.assert_not_called()
+
+    def test_review_prompt_requires_separate_allowlisted_tool_calls(self):
+        text = mod.review_prompt(15, self.pr, self.repo)
+        self.assertIn("NEVER send them together", text)
+        self.assertIn("git rev-parse HEAD", text)
+        self.assertIn("git status --short --branch", text)
+        self.assertIn("pwd -P", text)
+        self.assertIn("printf", text)
+
+
 class CleanupTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
