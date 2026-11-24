@@ -448,6 +448,42 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
     return removed, skipped
 
 
+def archive_blocked_run(repo: Path, issue: int, state_dir: Path) -> Path:
+    """Allow an explicitly authorized retry without discarding old audit logs.
+
+    Only an earlier blocked run with no PR and no surviving worktrees may be
+    archived. Uncommitted/active/unknown worktrees must be investigated rather
+    than overwritten by another agent.
+    """
+    state_file = state_dir / "state.json"
+    try:
+        previous = json.loads(state_file.read_text())
+    except (OSError, ValueError) as exc:
+        raise Blocked("Cannot inspect old run state; refusing automatic retry.") from exc
+    if (previous.get("issue") != issue or previous.get("phase") != "blocked"
+            or previous.get("pr")):
+        raise Blocked("Retry is only allowed for a blocked run with no PR.")
+    _, retained = cleanup_worktrees(repo, issue=issue)
+    if retained:
+        raise Blocked("Previous run still owns worktrees that could not be cleaned: "
+                      + "; ".join(retained))
+    registered = {x["path"] for x in registered_worktrees(repo)}
+    candidates = [previous.get("development_worktree"),
+                  previous.get("review_worktree")]
+    candidates += [x.get("path") for x in previous.get("review_worktrees", [])
+                   if isinstance(x, dict)]
+    for item in candidates:
+        if isinstance(item, str) and Path(item).resolve() in registered:
+            raise Blocked(f"Previous run worktree remains registered: {item}")
+    archive = state_dir.with_name(
+        state_dir.name + "-history-" +
+        dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        + "-" + secrets.token_hex(3))
+    state_dir.rename(archive)
+    print(f"Preserved previous blocked run logs: {archive}", flush=True)
+    return archive
+
+
 def orchestrate(args: argparse.Namespace) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not repo.is_dir():
@@ -457,9 +493,10 @@ def orchestrate(args: argparse.Namespace) -> int:
     info = preflight(repo, issue, model)
     run_home = repo.parent / f".{repo.name}-agent-runs"
     state_dir = run_home / f"issue-{issue}"
-    if state_dir.exists():
+    if state_dir.exists() and not args.retry_blocked:
         raise Blocked(f"Existing run for Issue #{issue}: {state_dir}. "
-                      "Inspect its state/logs; manual recovery is required in v1.")
+                      "For a previous blocked run with no PR, use --retry-blocked "
+                      "with --approve-issue after inspecting its last error.")
     if args.dry_run:
         print(f"DRY RUN: would create a separate worktree from origin/{BASE_BRANCH}, "
               "launch OpenCode Build and Reviewer as fresh sessions, and leave PR unmerged.")
@@ -468,6 +505,10 @@ def orchestrate(args: argparse.Namespace) -> int:
     if not args.approve_issue:
         raise Blocked("Execution requires --approve-issue, explicitly authorizing "
                       "this open issue for the supervised pilot. Use --dry-run first.")
+    if args.retry_blocked:
+        if not state_dir.is_dir():
+            raise Blocked("--retry-blocked requires an existing blocked run state.")
+        archive_blocked_run(repo, issue, state_dir)
     run_cmd(["git", "fetch", "origin", BASE_BRANCH], repo, timeout=120)
     run_cmd(["git", "rev-parse", "--verify", f"origin/{BASE_BRANCH}"], repo)
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -560,11 +601,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", help="explicit OpenAI model ID from OpenCode")
     parser.add_argument("--dry-run", action="store_true", help="preflight only; no writes or AI runs")
     parser.add_argument("--approve-issue", action="store_true", help="authorize this issue's execution")
+    parser.add_argument("--retry-blocked", action="store_true",
+                        help="archive a previous blocked run with no PR after safe cleanup")
     parser.add_argument("--timeout-minutes", type=int, default=60,
                         help="timeout per model session (default: 60)")
     args = parser.parse_args(argv)
     if args.cleanup_worktrees:
-        if args.issue is not None or args.model or args.dry_run or args.approve_issue:
+        if args.issue is not None or args.model or args.dry_run or args.approve_issue or args.retry_blocked:
             parser.error("--cleanup-worktrees takes no issue/model/approval arguments")
         try:
             repo = Path(args.repo).expanduser().resolve()
@@ -579,6 +622,8 @@ def main(argv: list[str] | None = None) -> int:
         except Blocked as exc:
             print(f"BLOCKED: {exc}", file=sys.stderr)
             return 2
+    if args.retry_blocked and args.dry_run:
+        parser.error("--retry-blocked must not be combined with --dry-run")
     if args.issue is None or args.issue < 1 or not args.model or not 1 <= args.timeout_minutes <= 180:
         parser.error("provide ISSUE and --model; timeout must be 1–180 minutes")
     try:
