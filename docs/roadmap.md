@@ -5,6 +5,20 @@
 > **Distinction:** The Phase 3 vertical slice is a proof of the player loop. The MVP additionally requires the approved minimum multi-season experience, content, onboarding, save/resume, reliability, accessibility, offline distribution and release acceptance. See Issue #20 for the **unresolved** exact product scope.
 
 
+## Immediate priority — approved prototype-first strategy
+
+Complete and play one competition before deciding MVP scope (#20). Expand in small increments after the prototype is functional. Preserve the release backlog as future work, not current scope.
+
+1. Simulation foundation: #27–30.
+2. Living house: #31–34.
+3. Producer gameplay: #35, #39–42, #44 (basic feedback).
+4. Supernatural gameplay: #36–38.
+5. Complete prototype: #45, #47 (single season), #49, #51 (binary outcome only).
+
+Integrate #19 tests and #43 causal debugging as development proceeds. Use coherent readable placeholder visuals early: furnished rooms, distinguishable contestants, recognizable objects and simple movement and sound cues. No final art requirement. Keep presentation replaceable.
+
+Defer #20, #21, #22, #24, #25 and release/content/campaign expansion until prototype evidence exists; #26 only needs functional observation and controls before their implementation. #46 is superseded by #7; no operational viability gate. Persistence only as needed for the prototype. Use existing issues and narrow their acceptance criteria before assignment. No speculative systems.
+
 ## Phase 0 — Local agent reliability
 - Verify LM Studio local API and exact model IDs/quantization/context settings on Bazzite (RTX 3080 Ti 12 GB VRAM, 64 GB RAM).
 - Evaluate OpenCode + LM Studio with one agent first; measure tool reliability before introducing delegated roles.
@@ -17,13 +31,13 @@ Review vision, unresolved questions, requirements and technical evaluation crite
 ## Phase 2 — Engine spikes
 Implement small, throwaway proofs for headless simulation, isometric view, event observation, save/load and testing. Select engine based on measured results and human approval.
 
-## Phase 3 — Vertical slice [PROPOSED scope]
+## Phase 3 — Functional prototype [APPROVED direction; exact counts provisional]
 - One house with roughly 5–7 rooms; four differentiated contestants.
 - Pausable time, a handful of staged scares, observation-based player interface.
 - Fear, beliefs/suspicion, basic social information exchange and voluntary quitting.
 - One autonomous supernatural entity that may act against producer goals.
 - At least one contestant countermeasure (avoidance or attempted banishment).
-- One possible autonomous entity, a binary persistent-haunting outcome report, and save/load. No survival or operational-viability gate.
+- Binary persistent-haunting outcome report; persistence only as needed for prototype. No survival or operational-viability gate.
 - Headless simulation and QA inspector.
 These are sizing suggestions, not approved feature counts.
 
