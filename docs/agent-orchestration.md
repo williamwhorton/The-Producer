@@ -30,9 +30,9 @@ python3 tools/orchestrate.py --cleanup-worktrees
 
 The cleanup command requires neither an issue number nor a model and starts **no AI agents**. It examines registered sibling worktrees matching the project's agent/issue/review naming conventions, not arbitrary directories. It removes a candidate only if:
 - No running Linux process has its working directory inside the worktree.
-- There are no uncommitted/untracked files, and no ignored files outside disposable `.godot/` cache.
+- There are no uncommitted/untracked files, and ignored files are limited to disposable Godot `.godot/` caches (including caches nested under `spikes/*/`). These generated cache directories are removed **only after** commit preservation is verified; all other ignored files are retained.
 - The worktree's HEAD is proved preserved in the matching GitHub PR (legacy issue worktrees must have a **merged** PR), or a fresh agent branch has no commits beyond `origin/main`.
-- A detached review checkout has its expected commit recorded in runner state.
+- A detached review checkout has its expected commit recorded in runner state; for older runs that did not record every Reviewer commit, its commit must be verified as an ancestor of the head of a **merged PR that closes the same issue**, using the original issue's recorded PR URL.
 
 Any unsafe or unverifiable checkout is **retained with an explicit explanation**. No `git clean`, `git reset --hard`, force-removal, or directory-level `rm` is used. Logs/state under `../.The-Producer-agent-runs/issue-N/` are intentionally retained as a durable audit trail; removing worktrees does not reset the runner's duplicate-issue protection.
 
