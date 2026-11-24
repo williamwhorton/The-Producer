@@ -1,0 +1,5 @@
+config_version=5
+
+[application]
+
+config/name="Issue #15 — Headless Simulation Proof"
