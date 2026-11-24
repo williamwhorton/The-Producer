@@ -1,6 +1,6 @@
 # Contestants, Knowledge and Observation
 
-**Proposed implementation boundary:** [ADR-0004 — Private state and producer observations](../decisions/ADR-0004-producer-observation-boundary.md) (Issue #3). **Not yet Creative Director-approved.** G-06's imperfect-knowledge principle is already confirmed; exact surveillance, uncertainty displays and interfaces are not.
+**Approved architectural boundary:** [ADR-0004 — Private state and producer observations](../decisions/ADR-0004-producer-observation-boundary.md) (Issue #3; Creative Director approval, 2026-11-23 ET). G-06's imperfect-knowledge principle is confirmed; exact surveillance, uncertainty displays, observation schema and producer actions remain separate open decisions.
 
 ## Goals [CONFIRMED]
 Contestants act independently and can infer, investigate, collaborate, conceal information, flee, resist and confront supernatural threats. The producer cannot read their minds.
@@ -12,7 +12,7 @@ Identity/traits; motives for staying; perceived safety; fear/stress; beliefs abo
 Perceive local events -> update memories/beliefs -> evaluate needs/goals/relationships -> choose action -> emit observable events. Actions include socializing, seeking reassurance, investigating, confronting, cooperating, avoiding, quitting and ritual preparation.
 
 ## Observation boundary [REQUIRED design invariant]
-`PrivateContestantState` must never be directly serialized to normal player-facing views. The [ADR-0004 proposal](../decisions/ADR-0004-producer-observation-boundary.md) compares direct filtering against a single **source-mediated observation projector**. The projector would create detached, allowlisted evidence only when a real authorized capture source (potentially a camera, crew report, testimony or other approved channel) explains why the producer knows it. The exact source inventory and observation contents remain **unapproved** under #16. Any optional estimate must derive from evidence and must not masquerade as direct access to hidden fear, knowledge, intent or the canonical truth. Hidden private conversations cannot be reported verbatim without an eligible source.
+`PrivateContestantState` must never be directly serialized to normal player-facing views. Approved [ADR-0004](../decisions/ADR-0004-producer-observation-boundary.md) rejects per-UI direct filtering of world truth in favor of a single **source-mediated observation projector**. The projector would create detached, allowlisted evidence only when a real authorized capture source (potentially a camera, crew report, testimony or other approved channel) explains why the producer knows it. The exact source inventory and observation contents remain **unapproved** under #16. Any optional estimate must derive from evidence and must not masquerade as direct access to hidden fear, knowledge, intent or the canonical truth. Hidden private conversations cannot be reported verbatim without an eligible source.
 
 ## Off-site event vignette implications [PROPOSED]
 
