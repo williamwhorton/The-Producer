@@ -374,6 +374,48 @@ def pr_preserves_head(repo: Path, branch: str, sha: str, merged_only: bool) -> b
                and p.get("state") in allowed for p in results)
 
 
+def merged_pr_contains_review_commit(repo: Path, issue: int, sha: str,
+                                     pr_url: str | None) -> bool:
+    """For old runner logs, establish a detached SHA was part of a merged PR.
+
+    This is only a fallback when an older runner did not record review SHA
+    history. Do not trust a directory's name or the local commit alone.
+    """
+    if not isinstance(pr_url, str):
+        return False
+    match = re.fullmatch(
+        rf"https://github\.com/{re.escape(REPOSITORY)}/pull/([0-9]+)", pr_url)
+    if not match or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return False
+    pr = json_cmd(["gh", "pr", "view", match[1], "--repo", REPOSITORY,
+                   "--json", "state,headRefOid,body"], repo)
+    if (not isinstance(pr, dict) or pr.get("state") != "MERGED"
+            or not closes_issue(pr.get("body") or "", issue)
+            or not re.fullmatch(r"[0-9a-f]{40}", pr.get("headRefOid") or "")):
+        return False
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", sha, pr["headRefOid"]],
+        cwd=repo, capture_output=True, check=False)
+    return result.returncode == 0
+
+
+def godot_ignored_cache_dirs(worktree: Path, ignored: list[str]) -> list[Path]:
+    """Recognize only disposable .godot caches, including nested Godot projects."""
+    caches: set[Path] = set()
+    for name in ignored:
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts or ".godot" not in relative.parts:
+            raise Blocked("ignored files outside disposable .godot cache")
+        cache_parts = relative.parts[:relative.parts.index(".godot") + 1]
+        cache = worktree.joinpath(*cache_parts)
+        if cache.is_symlink() or not cache.is_dir():
+            raise Blocked("Godot cache is not a normal directory; refusing to delete it")
+        if not cache.resolve().is_relative_to(worktree.resolve()):
+            raise Blocked("Godot cache resolves outside the worktree")
+        caches.add(cache)
+    return sorted(caches)
+
+
 def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, list[str]]:
     """Remove only inactive, clean, owned worktrees with safely preserved commits.
 
@@ -382,6 +424,7 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
     repo = repo.resolve()
     known: set[Path] = set()
     review_heads: dict[Path, str] = {}
+    review_prs: dict[int, str] = {}
     state_home = repo.parent / f".{repo.name}-agent-runs"
     if state_home.is_dir():
         for file in state_home.glob("issue-*/state.json"):
@@ -391,6 +434,8 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
                 continue
             if issue is not None and state.get("issue") != issue:
                 continue
+            if isinstance(state.get("issue"), int) and isinstance(state.get("pr"), str):
+                review_prs[state["issue"]] = state["pr"]
             for name in ("development_worktree", "review_worktree"):
                 value = state.get(name)
                 if isinstance(value, str):
@@ -425,13 +470,16 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
             ignored = run_cmd(["git", "-C", str(path), "status", "--porcelain",
                                "--ignored", "--untracked-files=all"], repo)
             extras = [line[3:] for line in ignored.splitlines() if line.startswith("!! ")]
-            if any(not (item == ".godot/" or item.startswith(".godot/")) for item in extras):
-                raise Blocked("ignored files outside disposable .godot cache")
+            cache_dirs = godot_ignored_cache_dirs(path, extras)
             head = run_cmd(["git", "-C", str(path), "rev-parse", "HEAD"], repo)
             branch = record.get("branch", "").removeprefix("refs/heads/")
             if is_review and "detached" in record:
                 if review_heads.get(path) != head:
-                    raise Blocked("detached review commit not verified in runner state")
+                    match = re.match(rf"{re.escape(repo.name)}-review-(\d+)-", name)
+                    review_issue = int(match[1]) if match else None
+                    if review_issue is None or not merged_pr_contains_review_commit(
+                            repo, review_issue, head, review_prs.get(review_issue)):
+                        raise Blocked("detached review commit not verified in runner state or merged PR")
             elif branch and pr_preserves_head(repo, branch, head, is_legacy):
                 pass
             elif (branch and is_agent and not is_legacy and
@@ -442,6 +490,11 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
                 pass
             else:
                 raise Blocked("local commit is not verified on an eligible GitHub PR")
+            # Godot's generated .godot caches are safe to remove; Git refuses
+            # worktree removal when ignored generated files remain in the checkout.
+            # Never delete any other ignored content or follow cache symlinks.
+            for cache_dir in cache_dirs:
+                shutil.rmtree(cache_dir)
             run_cmd(["git", "worktree", "remove", str(path)], repo, timeout=120)
             removed += 1
             print(f"CLEANED: {path}", flush=True)
