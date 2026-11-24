@@ -177,5 +177,105 @@ class FlowTests(unittest.TestCase):
             with self.assertRaisesRegex(mod.Blocked, 'Existing run'):
                 mod.orchestrate(self.args)
 
+
+class CleanupTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name) / "The-Producer"
+        self.repo.mkdir()
+        self.agent = Path(self.temp.name) / "The-Producer-agent-14-test"
+        self.agent.mkdir()
+        self.record = {"path": self.agent, "branch": "refs/heads/agent/issue-14-test",
+                       "HEAD": "a" * 40}
+
+    def test_worktree_parser(self):
+        raw = (f"worktree {self.repo}\nHEAD {'0'*40}\nbranch refs/heads/main\n\n"
+               f"worktree {self.agent}\nHEAD {'a'*40}\n"
+               "branch refs/heads/agent/issue-14-test\n")
+        with patch.object(mod, "run_cmd", return_value=raw):
+            result = mod.registered_worktrees(self.repo)
+        self.assertEqual([x["path"] for x in result], [self.repo, self.agent])
+
+    def test_clean_pushed_branch_is_removed_without_force(self):
+        commands = []
+        def cmd(argv, cwd, **kwargs):
+            commands.append(argv)
+            return "a" * 40 if "rev-parse" in argv else ""
+        with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd), \
+             patch.object(mod, "pr_preserves_head", return_value=True):
+            count, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual((count, skipped), (1, []))
+        self.assertIn(["git", "worktree", "remove", str(self.agent)], commands)
+        self.assertFalse(any("--force" in c for c in commands))
+
+    def test_busy_worktree_remains_intact(self):
+        with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
+             patch.object(mod, "worktree_in_use", return_value=True), \
+             patch.object(mod, "run_cmd") as command:
+            count, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual(count, 0)
+        self.assertIn("running process", skipped[0])
+        command.assert_not_called()
+
+    def test_uncommitted_changes_are_preserved(self):
+        def cmd(argv, cwd, **kwargs):
+            return " M main.gd" if "status" in argv else ""
+        with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd):
+            count, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual(count, 0)
+        self.assertIn("uncommitted", skipped[0])
+
+    def test_unpushed_commits_are_preserved(self):
+        def cmd(argv, cwd, **kwargs):
+            return "a" * 40 if "rev-parse" in argv else ""
+        with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd), \
+             patch.object(mod, "pr_preserves_head", return_value=False), \
+             patch.object(mod.subprocess, "run") as sub:
+            sub.return_value.returncode = 1
+            count, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual(count, 0)
+        self.assertIn("not verified", skipped[0])
+
+    def test_detached_review_requires_matching_recorded_commit(self):
+        review = self.repo.parent / "The-Producer-review-14-test"
+        review.mkdir()
+        state_dir = self.repo.parent / ".The-Producer-agent-runs" / "issue-14"
+        state_dir.mkdir(parents=True)
+        (state_dir / "state.json").write_text(
+            '{"issue":14,"review_worktree":"' + str(review) +
+            '","head_sha":"' + "b" * 40 + '"}')
+        record = {"path": review, "HEAD": "a" * 40, "detached": ""}
+        def cmd(argv, cwd, **kwargs):
+            return "a" * 40 if "rev-parse" in argv else ""
+        with patch.object(mod, "registered_worktrees", return_value=[record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd):
+            count, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual(count, 0)
+        self.assertIn("detached review commit", skipped[0])
+
+    def test_legacy_requires_merged_pr(self):
+        legacy = self.repo.parent / "The-Producer-issue-13-followup"
+        legacy.mkdir()
+        record = {"path": legacy, "HEAD": "a" * 40,
+                  "branch": "refs/heads/spike/issue-13-isometric-followup"}
+        def cmd(argv, cwd, **kwargs):
+            return "a" * 40 if "rev-parse" in argv else ""
+        with patch.object(mod, "registered_worktrees", return_value=[record]), \
+             patch.object(mod, "worktree_in_use", return_value=False), \
+             patch.object(mod, "run_cmd", side_effect=cmd), \
+             patch.object(mod, "pr_preserves_head", return_value=True) as proof:
+            count, skipped = mod.cleanup_worktrees(self.repo)
+        self.assertEqual((count, skipped), (1, []))
+        self.assertTrue(proof.call_args.args[3])
+
+
 if __name__ == '__main__':
     unittest.main()
