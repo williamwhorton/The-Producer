@@ -45,6 +45,26 @@ godot --path "$PWD/spikes/issue-4-3d"
 
 No issue branch checkout or separate Godot worktree is needed.
 
+## Re-review an existing PR without re-running development
+
+An earlier Issue #15 attempt produced [PR #79](https://github.com/williamwhorton/The-Producer/pull/79), but independent review stopped before inspecting the code because the Reviewer bundled several repository checks into **one composite shell command**. OpenCode 2.4.1 treated that entire string as an `ask` operation and automatically rejected it in noninteractive mode. No code defect or failed test was established by that verdict.
+
+The Reviewer profile now **requires separate single-command shell calls** for its allowlisted read-only checks, including `pwd`, `git rev-parse --show-toplevel`, `git rev-parse HEAD`, `git branch --show-current`, and `git status --short --branch`. It must not combine those with `;`, `&&`, `printf`, pipes or redirects. Do not widen to `shell: *` / `external_directory: *` approval, and do not introduce the deferred permission broker.
+
+To retry the **review only** of an existing open PR (with no additional Build session):
+
+```sh
+cd ~/Projects/The-Producer
+git switch main
+git pull --ff-only
+python3 tools/orchestrate.py 15 --review-pr 79 \
+  --model 'openai/YOUR-VERIFIED-MODEL#high'
+```
+
+Replace the model placeholder with the verified ChatGPT-connected model ID. For a no-write preflight, add `--dry-run`. The command validates the exact Issue #15/PR #79 relationship, expected branch, unchanged PR head, and real detached review SHA. It creates one new Reviewer session in a temporary worktree and records its transcript under a new issue-scoped review-only directory in `../.The-Producer-agent-runs/`. **It does not create another development branch, amend the PR, merge anything, or erase previous blocked-run transcripts.** At exit it performs the same safe worktree cleanup as the main runner. A Reviewer's `APPROVE` verdict is independent technical evidence, not Creative Director acceptance.
+
+If an individually allowlisted command is still rejected, preserve the new transcript and report the exact command/denial; no repeated developer run is needed. Any substantive `REQUEST_CHANGES` finding should be addressed against the existing PR, not by creating a duplicate.
+
 ## Correct worktree startup and safe retry after a blocked run
 
 **Root cause addressed:** Python's `subprocess.Popen(cwd=...)` changes the launched process's working directory but does **not** rewrite the inherited `PWD` environment variable. Some OpenCode `run` versions prefer `PWD` to process cwd and can therefore initialize a new session in the primary checkout on `main`, even though the runner launched the CLI for a sibling worktree. The runner now sets **both the child cwd and `PWD` to the same resolved worktree path**, and checks Git's actual top-level directory and branch before and after Build, before correction, and verifies the Reviewer's detached HEAD matches the exact PR commit. Agent instructions also demand an independent startup identity check and stop rather than change files on an unexpected branch.
