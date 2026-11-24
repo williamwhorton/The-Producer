@@ -108,6 +108,27 @@ def decide_event(event_name, payload, owner, repo):
     return {}
 
 
+def superseded(event_name, payload, comments, owner):
+    """An older PR or comment job must not undo a later owner command."""
+    commands = [
+        c for c in comments
+        if (c.get("user") or {}).get("login", "").casefold() == owner.casefold()
+        and comment_status(c.get("body") or "")
+    ]
+    if not commands:
+        return False
+    latest = max(commands, key=lambda c: (c["created_at"], c["id"]))
+    if event_name == "issue_comment":
+        posted = payload["comment"]
+        return latest["id"] != posted["id"] or latest["body"] != posted["body"]
+    if event_name == "pull_request_target":
+        pr = payload["pull_request"]
+        timestamp = pr["created_at"] if payload["action"] == "opened" else pr["updated_at"]
+        return latest["created_at"] > timestamp or (
+            latest["created_at"] == timestamp and comment_status(latest["body"]) == "Blocked")
+    return False
+
+
 class GitHub:
     def __init__(self, token):
         if not token:
@@ -159,6 +180,16 @@ class GitHub:
         if "pull_request" in issue:
             raise SyncError(f"#{number} is a PR, not an issue")
         return issue
+
+    def issue_comments(self, owner, repo, number):
+        page = 1
+        while True:
+            batch = self.request(
+                f"/repos/{owner}/{repo}/issues/{number}/comments?per_page=100&page={page}")
+            yield from batch
+            if len(batch) < 100:
+                return
+            page += 1
 
 
 PROJECT_QUERY = """
@@ -298,13 +329,17 @@ def main():
         raise SyncError("Missing GITHUB_EVENT_PATH")
     with open(path, encoding="utf-8") as file:
         event = json.load(file)
-    updates = decide_event(os.environ.get("GITHUB_EVENT_NAME", ""), event, owner, repo)
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    updates = decide_event(event_name, event, owner, repo)
     for number, status in updates.items():
         issue = api.issue(owner, repo, number)
         if status == "Done" and issue["state"] != "closed":
             raise SyncError(f"Cannot mark open issue #{number} Done")
         if status != "Done" and issue["state"] == "closed":
             project.update(number, "Done")
+        elif event_name in ("issue_comment", "pull_request_target") and superseded(
+                event_name, event, api.issue_comments(owner, repo, number), owner):
+            print(f"#{number}: skip stale status event; newer owner command exists")
         else:
             project.update(number, status)
     if not updates:

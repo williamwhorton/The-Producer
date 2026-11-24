@@ -165,16 +165,17 @@ Use the GitHub UI, the connected GitHub integration, or an authenticated GitHub 
 gh issue comment 4 --repo williamwhorton/The-Producer --body "/status In Progress"
 ```
 
-- **Lead:** `Ready` when scope, approvals and dependencies are in place; `Blocked` when dependencies prevent work; `Backlog` on deferral.
+- **Lead / Creative Director:** `Ready` after bounded scope and prerequisites are recorded for the two-day queue. An undispatched successor may wait in Ready; use `Blocked` for claimed work that needs intervention and `Backlog` on deferral.
 - **Developer/Architect:** `In Progress` when actually starting; `Blocked` when waiting on a concrete prerequisite.
 - **Reviewer:** `In Review` when reviewing without a PR; a ready PR with a closing reference already does this automatically.
 - **Done** is tied to **issue closure** after acceptance; attempting `/status Done` on an open issue fails instead of making misleading board state.
-- Agents must confirm that posting succeeded. If GitHub CLI authentication or comment permissions are missing, report the missing transition so the Lead or ChatGPT's authorized GitHub connection can issue it. Never silently claim the board was updated.
+- Agents must verify the resulting board value, not just successful comment posting. In [queue mode](agent-orchestration.md#run-the-ready-queue), the trusted host posts and reads back claims and handoffs; Build and Reviewer do not need direct Project access. If the host cannot verify auth, scope or the expected Status, it stops dispatch and retains the evidence.
 
 For security, status comments are accepted only when posted by the repository's owner, and PR-triggered transitions require the PR to originate from the same repository. Do not add arbitrary status commands to untrusted PR descriptions.
 
 ## Reconciliation and failure recovery
 
+- Status writes are serialized with a multi-run Actions queue so unrelated pending events are not replaced by normal overlap. A delayed PR or comment job does not override a newer explicit owner status command.
 - Run **Actions → Sync GitHub Project Status → Run workflow** with an **empty** bootstrap input whenever board items may be missing or closed issues were not moved to Done.
 - Routine reconciliation adds missing issue cards, sets all closed issues Done, and keeps existing **non-Done** statuses on open issues so it won't erase manually or agent-set work stages. It resets erroneously Done open issues to Backlog.
 - One-time manual overrides are supported with `ISSUE=STATUS` pairs separated by commas. Use only when correcting an existing status (e.g. `4=In Progress,5=Blocked`).

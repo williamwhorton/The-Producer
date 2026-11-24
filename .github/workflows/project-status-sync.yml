@@ -22,10 +22,10 @@ permissions:
   issues: read
   pull-requests: read
 
-# Avoid conflicting updates from simultaneous PR, issue, and comment events.
+# Serialize writes without replacing an unrelated pending event.
 concurrency:
   group: project-status-sync
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   sync:

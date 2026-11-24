@@ -1,6 +1,6 @@
 # Lead-agent orchestration: implementation options and pilot contract
 
-**Status:** Option A implemented as a **supervised pilot** (`tools/orchestrate.py`); Python unit tests pass, but **no authenticated live OpenCode/GitHub run has been performed by this change**. Other options remain proposals. This does **not** authorize autonomous backlog execution, change permissions, or certify the entire workflow as production-ready.
+**Status:** Option A is implemented in `tools/orchestrate.py` for an explicitly approved single issue and, under [#96](https://github.com/williamwhorton/The-Producer/issues/96), for an opt-in Ready queue. The queue requires successful authenticated host preflight and a bounded live validation before continuous use. It does not authorize Backlog execution, permission changes, or merging.
 **Environment:** The Creative Director uses **OpenCode CLI 2.4.1** on Bazzite Linux, with ChatGPT-connected cloud models. Build is the validated interactive implementation agent; the Python subprocess runner's live tool permissions, provider authentication, and model resolution have **not** yet been inspected on that machine.
 
 ## Objective and authority
@@ -111,7 +111,36 @@ For a real run, the script (1) requires the explicit `--approve-issue` authoriza
 
 **Local state and cleanup:** State/transcripts remain under `../.The-Producer-agent-runs/issue-N/`, outside Git, while eligible worktrees are removed automatically on run exit. The runner records every Reviewer worktree and cleanup exceptions in `state.json`. Uncommitted, unpushed, in-use or unverifiable worktrees are retained and clearly reported. It does not automatically resume an interrupted run or delete audit records; see the cleanup command above.
 
-**Important limitations:** This is not a headless permission-approval mechanism. It does **not** pass `--auto`, and any OpenCode permission request that cannot be serviced from the CLI will cause a failure or timeout, leaving evidence for diagnosis. It checks an explicit `openai/...` model ID and rejects `OPENAI_API_KEY` in the shell environment, but **cannot prove which OpenAI credential/payment route the saved OpenCode account uses**; confirm ChatGPT plan access before a run. Logs can contain sensitive output and should not be shared or committed. The script checks the issue is open and has content; `--approve-issue` is the human affirmation that the issue and dependencies are approved, **not** an automated GitHub Projects Ready-field check. It does not independently interpret game acceptance criteria or execute arbitrary test suites: those remain Developer/Reviewer responsibilities, and PR evidence text alone is not proof. No autonomous backlog selection, event listening, automatic Project status writes, or PR merges.
+**Important limitations:** This is not a headless permission-approval mechanism. It does **not** pass `--auto`, and any OpenCode permission request that cannot be serviced from the CLI will cause a failure or timeout, leaving evidence for diagnosis. It checks an explicit `openai/...` model ID and rejects `OPENAI_API_KEY` in the shell environment, but **cannot prove which OpenAI credential/payment route the saved OpenCode account uses**; confirm ChatGPT plan access before a run. Logs can contain sensitive output and should not be shared or committed. In single-issue mode the script checks the issue is open and has content; `--approve-issue` is the human affirmation that the issue and dependencies are approved, **not** an automated GitHub Projects Ready-field check. Developer/Reviewer independently interpret scope and execute applicable tests. Neither mode promotes Backlog or merges PRs.
+
+## Run the Ready queue
+
+From the primary Linux checkout as the Creative Director, keep the existing ChatGPT-connected OpenCode sign-in and `gh` login as `williamwhorton`. Verify `opencode --version`, `opencode run --help`, `opencode debug agent build`, and `opencode debug agent producer-reviewer`. Confirm the exact model and variant with `opencode models` and the working interactive configuration. The `gh` credential must already be able to read the owner Project, repository Actions variable, native fields and dependencies, and post owner comments for live operation. The status workflow must already be configured with its existing secret; the runner does not read that secret or grant agent sessions new permissions.
+
+```sh
+cd ~/Projects/The-Producer
+PROJECT_NUMBER="$(gh variable get PROJECT_NUMBER --repo williamwhorton/The-Producer)"
+read -r -p 'Exact ChatGPT-connected OpenCode model ID (including variant, if used): ' MODEL
+python3 tools/orchestrate.py --queue --project "$PROJECT_NUMBER" --model "$MODEL" --dry-run
+```
+
+Expect `SKIP` for excluded or unclassified cards, `WAIT` for unresolved prerequisites, and `DRY RUN: eligible in order:`. No comments, Git fetches, worktrees, local run state or model calls are made. Compare the result against the board and issue records. Do not run live if any read fails. Use the [Ready and prerequisite conventions](project-board-setup.md#ready-versus-backlog--including-creative-director-decisions) and [metadata backfill](issue-metadata-migration.md) to triage missing data rather than relaxing permissions.
+
+Once preflight succeeds and the status workflow change is on trusted `main`, authorize one small issue for a bounded live validation. Verify that it is the intended and **only eligible** issue in preflight, then use:
+
+```sh
+python3 tools/orchestrate.py --queue --project "$PROJECT_NUMBER" --model "$MODEL" --once --timeout-minutes 15
+```
+
+Expect one verified In Progress claim before Build, a separate Reviewer at the PR head, and a verified In Review handoff for a technically approved **unmerged** PR. A task failure must show a reason, retain evidence, and verify Blocked. A status/auth/API failure halts the queue; a successful `gh` comment alone is not board verification. When the bounded live check succeeds, start continuous operation explicitly:
+
+```sh
+python3 tools/orchestrate.py --queue --project "$PROJECT_NUMBER" --model "$MODEL" --poll-seconds 60
+```
+
+The host rechecks eligibility before claim and again before Build. Order is by number of other Ready agent candidates directly unblocked, then native Priority, then issue number. After a handoff or verified task failure it continues unrelated work; successors wait for owner acceptance, not merely technical review. If there is no eligible work, it rereads the board after the polling interval (60 seconds by default).
+
+**Stop:** Press **Ctrl+C** once in the foreground terminal (or send `SIGTERM` to the runner PID). Wait for it to exit; it stops the active child process group, preserves interrupted worktrees and state, and attempts to record verified Blocked if a claim succeeded. Check `../.The-Producer-agent-runs/issue-N/state.json`, local transcripts, the PR, and actual board status. Use the same primary checkout on one host/account. The shared local writer lock also covers single-issue, review-only, and cleanup commands; it is not a distributed lock. Do not delete the lock file or unresolved state. For an existing PR use review-only; otherwise use explicit `--retry-blocked` only after the previous blocked/interrupted claim, worktrees and PR absence have been verified. A status-unverified run needs manual reconciliation rather than automatic retry.
 
 ## Candidate approaches
 
@@ -164,9 +193,9 @@ git status --short --branch
 
 Do not paste any credentials. Confirm the exact connected model and that `producer-reviewer` is recognized with effective read-only tool restrictions. `opencode run --agent build "..." ` is a *documented syntax example*, not evidence that a background session has been successfully launched on this computer. Confirm the CLI supports the flags used before coding the runner.
 
-**Stage 1 — One issue, supervised.** The standard-library CLI runner and unit tests are now committed. **Next:** perform a dry-run and one explicitly authorized live pilot on the Creative Director's machine. Validate the exact model/provider, permission handling, developer artifact, fresh Reviewer, PR gate and human acceptance. Do not advance to board automation until this succeeds.
+**Stage 1 — One issue, supervised.** Perform a dry-run and one explicitly authorized live pilot on the Creative Director's machine. Validate the exact model/provider, permission handling, developer artifact, fresh Reviewer, PR gate and human acceptance.
 
-**Stage 2 — After the pilot succeeds.** Make the Lead a consistent user-facing entry point that invokes the verified runner through a bounded interface. Introduce event-driven triggers or API orchestration only if continuous monitoring measurably reduces manual work. Do not run a fully autonomous backlog worker by default.
+**Stage 2 — After the pilot succeeds.** Perform [queue preflight and a bounded live run](#run-the-ready-queue) before enabling polling. Event-driven triggers or a server are outside this scope.
 
 ## Operational and safety contracts
 

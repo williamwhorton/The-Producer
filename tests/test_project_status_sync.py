@@ -149,6 +149,23 @@ class EventTests(unittest.TestCase):
             {},
         )
 
+    def test_newer_owner_command_supersedes_queued_pr_and_comment_jobs(self):
+        opened = "2026-11-24T21:00:00Z"
+        failed = "2026-11-24T21:02:00Z"
+        claim = {"id": 4, "body": "/status In Progress", "created_at": opened,
+                 "user": {"login": self.OWNER}}
+        blocked = {"id": 5, "body": "/status Blocked", "created_at": failed,
+                   "user": {"login": self.OWNER}}
+        stranger = {**blocked, "id": 6, "body": "/status Ready", "user": {"login": "stranger"}}
+        pr = {"action": "opened", "pull_request": {"created_at": opened}}
+        self.assertFalse(sync.superseded("pull_request_target", pr, [claim], self.OWNER))
+        self.assertTrue(sync.superseded("pull_request_target", pr, [claim, blocked], self.OWNER))
+        self.assertTrue(sync.superseded("issue_comment", {"comment": claim}, [claim, blocked], self.OWNER))
+        self.assertFalse(sync.superseded("issue_comment", {"comment": blocked},
+                                         [claim, blocked, stranger], self.OWNER))
+        self.assertTrue(sync.superseded("issue_comment", {"comment": claim},
+                                        [{**claim, "body": "/status Backlog"}], self.OWNER))
+
 
 class ProjectTests(unittest.TestCase):
     def test_preserve_active_status_and_set_review(self):

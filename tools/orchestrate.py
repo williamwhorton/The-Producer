@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Supervised, single-issue OpenCode Build -> independent Reviewer pilot.
+"""Supervised OpenCode Build -> independent Reviewer runner.
 
-Only the explicitly specified issue may run. No merging, forced cleanup, permission auto-approval, model fallback
-or paid API selection.
+Run one explicitly approved issue, or opt in to the owner-authorized Ready queue.
+No merging, forced cleanup, permission auto-approval, model fallback or paid API selection.
 """
 
 from __future__ import annotations
 
 import argparse
 import codecs
+from contextlib import contextmanager
 import datetime as dt
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -20,6 +22,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 
 REPOSITORY = "williamwhorton/The-Producer"
 BASE_BRANCH = "main"
@@ -30,15 +33,24 @@ class Blocked(RuntimeError):
     """A fail-closed, human-actionable workflow blocker."""
 
 
+class GitHubUnavailable(Blocked):
+    """The control plane could not verify GitHub; do not keep dispatching."""
+
+
+class Interrupted(Blocked):
+    """An agent was stopped by the operator rather than failing a task."""
+
+
 def run_cmd(argv: list[str], cwd: Path, *, timeout: int = 40) -> str:
+    error = GitHubUnavailable if argv[0] == "gh" else Blocked
     try:
         result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True,
                                 timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise Blocked(f"Command unavailable or timed out: {argv[0]} ({exc})") from exc
+        raise error(f"Command unavailable or timed out: {argv[0]} ({exc})") from exc
     if result.returncode:
         excerpt = (result.stderr or result.stdout).strip()[-900:]
-        raise Blocked(f"{argv[0]} failed (exit {result.returncode}): {excerpt}")
+        raise error(f"{argv[0]} failed (exit {result.returncode}): {excerpt}")
     return result.stdout.strip()
 
 
@@ -47,7 +59,8 @@ def json_cmd(argv: list[str], cwd: Path) -> object:
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise Blocked(f"Unexpected JSON from {argv[0]}: {exc}") from exc
+        error = GitHubUnavailable if argv[0] == "gh" else Blocked
+        raise error(f"Unexpected JSON from {argv[0]}: {exc}") from exc
 
 
 def require_model(value: str) -> str:
@@ -209,8 +222,8 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
             if remainder:
                 print(remainder, end="", flush=True)
         pump = threading.Thread(target=stream, daemon=True)
-        pump.start()
         try:
+            pump.start()
             code = process.wait(timeout=timeout)
         except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
             try:
@@ -220,16 +233,21 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                pass
+            # The leader can exit on TERM before its children do.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            if process.returncode is None:
                 process.wait()
-            pump.join(timeout=2)
+            if pump.ident is not None:
+                pump.join(timeout=2)
             if process.stdout is not None:
                 process.stdout.close()
-            raise Blocked("Agent stopped (timeout or interruption); check logs. "
-                          "The worktree is preserved for inspection.") from exc
+            error = Interrupted if isinstance(exc, KeyboardInterrupt) else Blocked
+            reason = "interrupted" if isinstance(exc, KeyboardInterrupt) else "timed out"
+            raise error(f"Agent {reason}; check {log_path}.") from exc
         pump.join(timeout=2)
         if process.stdout is not None:
             process.stdout.close()
@@ -303,7 +321,7 @@ def correction_prompt(issue: int, pr: dict, review_text: str) -> str:
             f"Independent review:\n{review_text[-18000:]}")
 
 
-def preflight(repo: Path, issue: int, model: str, *, allow_open_pr: bool = False) -> dict:
+def host_preflight(repo: Path) -> tuple[str, str]:
     for exe in ("git", "gh", "opencode"):
         if not shutil.which(exe):
             raise Blocked(f"Missing '{exe}' from PATH.")
@@ -321,7 +339,7 @@ def preflight(repo: Path, issue: int, model: str, *, allow_open_pr: bool = False
         raise Blocked("GitHub repository identity differs from configured repository.")
     run_cmd(["gh", "auth", "status"], repo)
     version = run_cmd(["opencode", "--version"], repo)
-    run_cmd(["opencode", "run", "--help"], repo)
+    help_text = run_cmd(["opencode", "run", "--help"], repo)
     if not version:
         raise Blocked("Cannot determine installed OpenCode version.")
     if not (repo / ".opencode/agents/producer-reviewer.md").is_file():
@@ -329,6 +347,11 @@ def preflight(repo: Path, issue: int, model: str, *, allow_open_pr: bool = False
     review_config = (repo / ".opencode/agents/producer-reviewer.md").read_text()
     if "mode: primary" not in review_config or "effect: deny" not in review_config:
         raise Blocked("Reviewer profile not verified as primary with deny rules.")
+    return version, help_text
+
+
+def preflight(repo: Path, issue: int, model: str, *, allow_open_pr: bool = False) -> dict:
+    version, _ = host_preflight(repo)
     data = issue_details(issue, repo)
     if not allow_open_pr:
         existing_prs(issue, repo)
@@ -525,7 +548,7 @@ def archive_blocked_run(repo: Path, issue: int, state_dir: Path) -> Path:
         previous = json.loads(state_file.read_text())
     except (OSError, ValueError) as exc:
         raise Blocked("Cannot inspect old run state; refusing automatic retry.") from exc
-    if (previous.get("issue") != issue or previous.get("phase") != "blocked"
+    if (previous.get("issue") != issue or previous.get("phase") not in ("blocked", "interrupted")
             or previous.get("pr")):
         raise Blocked("Retry is only allowed for a blocked run with no PR.")
     old_branch = previous.get("branch")
@@ -653,8 +676,7 @@ def orchestrate(args: argparse.Namespace) -> int:
     model = require_model(args.model)
     issue = args.issue
     info = preflight(repo, issue, model)
-    run_home = repo.parent / f".{repo.name}-agent-runs"
-    state_dir = run_home / f"issue-{issue}"
+    state_dir = run_home(repo) / f"issue-{issue}"
     if state_dir.exists() and not args.retry_blocked:
         raise Blocked(f"Existing run for Issue #{issue}: {state_dir}. "
                       "For a previous blocked run with no PR, use --retry-blocked "
@@ -673,11 +695,18 @@ def orchestrate(args: argparse.Namespace) -> int:
         archive_blocked_run(repo, issue, state_dir)
     run_cmd(["git", "fetch", "origin", BASE_BRANCH], repo, timeout=120)
     run_cmd(["git", "rev-parse", "--verify", f"origin/{BASE_BRANCH}"], repo)
+    return develop_and_review(args, repo, model, info, state_dir)
+
+
+def develop_and_review(args, repo, model, info, state_dir, *, before_build=None) -> int:
+    """The shared, single-issue execution and independent review workflow."""
+    issue = info["number"]
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = f"{issue}-{stamp}-{secrets.token_hex(3)}"
     branch = f"agent/issue-{issue}-{stamp.lower()}-{secrets.token_hex(2)}"
     dev = repo.parent / f"{repo.name}-agent-{run_id}"
-    state_dir.mkdir(parents=True, exist_ok=False)
+    queued = before_build is not None
+    state_dir.mkdir(parents=True, exist_ok=queued)
     state_file = state_dir / "state.json"
     write_state(state_file, phase="starting", issue=issue, title=info["title"],
                 model=model, branch=branch, development_worktree=str(dev),
@@ -688,7 +717,14 @@ def orchestrate(args: argparse.Namespace) -> int:
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
         verify_checkout(dev, expected_branch=branch)
+        if queued:
+            before_build()
         prompt = developer_prompt(issue, branch, dev)
+        queue_instructions = ("\nThe host runner owns Project status transitions for this queue "
+                              "assignment. Do not post /status commands or change Project status; "
+                              "report blockers and evidence to the host.")
+        if queued:
+            prompt += queue_instructions
         run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
                    prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
         verify_checkout(dev, expected_branch=branch)
@@ -735,8 +771,11 @@ def orchestrate(args: argparse.Namespace) -> int:
                 raise Blocked("Independent review still requests changes after one correction cycle.")
             write_state(state_file, phase="correcting")
             verify_checkout(dev, expected_branch=branch)
+            prompt = correction_prompt(issue, pr, review_text)
+            if queued:
+                prompt += queue_instructions
             run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
-                       model, correction_prompt(issue, pr, review_text)], dev,
+                       model, prompt], dev,
                       state_dir / "developer-1.log", args.timeout_minutes * 60)
             verify_checkout(dev, expected_branch=branch)
             updated = pr_details(branch, issue, repo)
@@ -746,15 +785,528 @@ def orchestrate(args: argparse.Namespace) -> int:
             write_state(state_file, head_sha=pr["headRefOid"])
         raise Blocked("No decisive review outcome.")
     except Blocked as exc:
-        write_state(state_file, phase="blocked", reason=str(exc))
+        stage = json.loads(state_file.read_text())["phase"]
+        write_state(state_file, phase="blocked", reason=str(exc), failure_stage=stage)
         raise
     finally:
+        if not queued:
+            record_cleanup(repo, state_file)
+
+
+def record_cleanup(repo, state_file, *, issue=None):
+    try:
+        _, retained = cleanup_worktrees(repo, issue=issue)
+        write_state(state_file, cleanup_pending=retained)
+    except (Blocked, OSError) as exc:
+        print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
+        write_state(state_file, cleanup_pending=[str(exc)])
+
+
+OWNER = REPOSITORY.split("/")[0]
+QUEUE_LABEL = "agent:developer"
+PRIORITIES = ("Urgent", "High", "Medium", "Low")
+ISSUE_TYPES = ("Feature", "Bug", "Task", "Spike")
+STATUSES = ("Backlog", "Ready", "In Progress", "In Review", "Blocked", "Done")
+STATUS_COMMAND = re.compile(r"/status\s+(" + "|".join(STATUSES) + r")", re.I)
+PROJECT_ITEM = """
+    id isArchived project { id }
+    content { __typename ... on Issue { number repository { nameWithOwner } } }
+    fieldValueByName(name: "Status") {
+      ... on ProjectV2ItemFieldSingleSelectValue { name optionId }
+    }
+"""
+BOARD_QUERY = """
+query($owner: String!, $number: Int!, $after: String) {
+  user(login: $owner) {
+    projectV2(number: $number) {
+      id title closed
+      field(name: "Status") {
+        ... on ProjectV2SingleSelectField { options { id name } }
+      }
+      items(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { """ + PROJECT_ITEM + """ }
+      }
+    }
+  }
+}
+"""
+CARD_QUERY = """
+query($id: ID!) {
+  node(id: $id) { ... on ProjectV2Item { """ + PROJECT_ITEM + """ } }
+}
+"""
+QUEUE_ISSUE_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      number lastEditedAt
+      closedByPullRequestsReferences(first: 1, includeClosedPrs: true) {
+        totalCount
+      }
+      openImplementation: closedByPullRequestsReferences(first: 1) { totalCount }
+      timelineItems(last: 1, itemTypes: [CLOSED_EVENT, REOPENED_EVENT]) {
+        nodes {
+          __typename
+          ... on ReopenedEvent { createdAt }
+          ... on ClosedEvent {
+            createdAt stateReason actor { login }
+            closer {
+              __typename
+              ... on PullRequest {
+                state baseRefName repository { nameWithOwner }
+                mergedBy { login }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def declared_prerequisites(body, native):
+    """Never guess from a prose reference or silently discard a native edge."""
+    lines = re.findall(r"(?im)^[ \t]*Queue prerequisites:[ \t]*(.*)$", body)
+    if re.search(r"(?im)^[ \t#*-]*prerequisites[ \t]*\**:", body):
+        raise Blocked("replace legacy prerequisites with the reviewed queue declaration")
+    if not lines:
+        if native:
+            return native
+        raise Blocked("declare Queue prerequisites (or reconcile legacy prerequisites)")
+    if len(lines) != 1:
+        raise Blocked("ambiguous Queue prerequisites declarations")
+    value = lines[0].strip()
+    if value == "none" and not native:
+        return set()
+    if not re.fullmatch(r"#[1-9][0-9]*(?:[ \t]*,[ \t]*#[1-9][0-9]*)*", value):
+        raise Blocked("Queue prerequisites must list #N values, or none if no native blockers exist")
+    explicit = {int(number) for number in re.findall(r"#([0-9]+)", value)}
+    if native - explicit:
+        raise Blocked("Queue prerequisites omits a native blocker; reconcile both sources")
+    return explicit
+
+
+def accepted_dependency(detail):
+    """Verify human completion, not a Done card or a closed-as-not-planned issue."""
+    if detail["state"] != "closed" or detail.get("state_reason") != "completed":
+        return False
+    events = detail["graph"]["timelineItems"]["nodes"]
+    if not events or events[0]["__typename"] != "ClosedEvent":
+        return False
+    event = events[0]
+    if (event["stateReason"] != "COMPLETED" or event["createdAt"] != detail.get("closed_at")
+            or detail["graph"]["openImplementation"]["totalCount"]):
+        return False
+    closer = event["closer"]
+    if closer is None:
+        return (event.get("actor") or {}).get("login") == OWNER
+    return (closer["__typename"] == "PullRequest" and closer["state"] == "MERGED"
+            and closer["baseRefName"] == BASE_BRANCH
+            and closer["repository"]["nameWithOwner"] == REPOSITORY
+            and (closer.get("mergedBy") or {}).get("login") == OWNER)
+
+
+class ReadyBoard:
+    def __init__(self, repo, number):
+        self.repo, self.number = repo, number
+        self.project_id, self.options = None, None
+
+    def api(self, path, *, pages=False, body=None):
+        args = ["gh", "api", "--hostname", "github.com", "-H",
+                "X-GitHub-Api-Version: 2026-03-10"]
+        if pages:
+            args += ["--paginate", "--slurp"]
+        if body is not None:
+            args += ["-X", "POST", "-f", f"body={body}"]
+        data = json_cmd([*args, path], self.repo)
+        if not pages:
+            return data
+        if not isinstance(data, list) or not all(isinstance(page, list) for page in data):
+            raise GitHubUnavailable(f"Invalid paginated GitHub response for {path}")
+        return [item for page in data for item in page]
+
+    def graphql(self, query, **variables):
+        args = ["gh", "api", "graphql", "--hostname", "github.com", "-f", f"query={query}"]
+        for key, value in variables.items():
+            if value is not None:
+                args += ["-F" if type(value) is int else "-f", f"{key}={value}"]
+        payload = json_cmd(args, self.repo)
+        if not isinstance(payload, dict) or payload.get("errors") or not isinstance(payload.get("data"), dict):
+            raise GitHubUnavailable("Unverifiable GitHub GraphQL response.")
+        return payload["data"]
+
+    def card_status(self, item):
+        if item["project"]["id"] != self.project_id:
+            raise GitHubUnavailable("Project card belongs to a different board.")
+        field = item["fieldValueByName"]
+        if field is None:
+            return None
+        value = field["name"]
+        if value in STATUSES and field["optionId"] != self.options.get(value):
+            raise GitHubUnavailable("Project Status option changed; rerun preflight.")
+        return value
+
+    def ready(self):
+        ready, cursors = {}, set()
+        after = None
+        while True:
+            user = self.graphql(BOARD_QUERY, owner=OWNER, number=self.number, after=after)["user"]
+            project = user and user["projectV2"]
+            if not project or project["closed"]:
+                raise GitHubUnavailable(f"Project #{self.number} is unavailable or closed.")
+            options = {o["name"]: o["id"] for o in (project["field"] or {}).get("options", [])}
+            if not set(STATUSES) <= options.keys():
+                raise GitHubUnavailable(f"Project #{self.number} lacks required Status options.")
+            if self.project_id and (self.project_id, self.options) != (project["id"], options):
+                raise GitHubUnavailable("Project identity or Status configuration changed.")
+            self.project_id, self.options = project["id"], options
+            for item in project["items"]["nodes"]:
+                if item["isArchived"] or self.card_status(item) != "Ready":
+                    continue
+                content = item["content"]
+                if content is None or content["__typename"] == "RedactedProjectV2Item":
+                    raise GitHubUnavailable("Cannot verify identity of a Ready Project item.")
+                if content["__typename"] != "Issue" or content["repository"]["nameWithOwner"] != REPOSITORY:
+                    continue
+                number = content["number"]
+                if number in ready:
+                    raise GitHubUnavailable(f"Duplicate or inconsistent Ready cards for #{number}.")
+                ready[number] = item["id"]
+            paging = project["items"]["pageInfo"]
+            if not paging["hasNextPage"]:
+                return ready
+            after = paging["endCursor"]
+            if not after or after in cursors:
+                raise GitHubUnavailable("Board pagination did not advance.")
+            cursors.add(after)
+
+    def status(self, number, card):
+        item = self.graphql(CARD_QUERY, id=card)["node"]
+        content = item and item["content"]
+        if (not content or item["id"] != card or item["isArchived"]
+                or content["__typename"] != "Issue" or content["number"] != number
+                or content["repository"]["nameWithOwner"] != REPOSITORY):
+            raise GitHubUnavailable(f"Cannot verify the active Project card for #{number}.")
+        return self.card_status(item)
+
+    def issue(self, number):
+        detail = self.api(f"repos/{REPOSITORY}/issues/{number}")
+        if (detail["number"] != number or "pull_request" in detail
+                or detail["html_url"] != f"https://github.com/{REPOSITORY}/issues/{number}"):
+            raise GitHubUnavailable(f"Cannot verify issue identity for #{number}.")
+        return detail
+
+    def graph_issue(self, number):
+        data = self.graphql(QUEUE_ISSUE_QUERY, owner=OWNER,
+                            repo=REPOSITORY.split("/")[1], number=number)
+        issue = (data["repository"] or {}).get("issue")
+        if not issue or issue["number"] != number:
+            raise GitHubUnavailable(f"Cannot verify issue #{number} in GraphQL.")
+        return issue
+
+    def dependency(self, number):
         try:
-            _, retained = cleanup_worktrees(repo)
-            write_state(state_file, cleanup_pending=retained)
-        except (Blocked, OSError) as exc:
-            print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
-            write_state(state_file, cleanup_pending=[str(exc)])
+            detail = self.issue(number)
+        except GitHubUnavailable as exc:
+            if "HTTP 404" in str(exc):
+                return False  # Missing or invisible prerequisite: this issue must wait.
+            raise
+        if detail["state"] != "closed":
+            return False
+        detail["graph"] = self.graph_issue(number)
+        return accepted_dependency(detail)
+
+    def latest_status_command(self, number):
+        comments = self.api(f"repos/{REPOSITORY}/issues/{number}/comments?per_page=100", pages=True)
+        commands = [
+            c for c in comments if (c.get("user") or {}).get("login") == OWNER
+            and STATUS_COMMAND.fullmatch(c["body"].strip())
+        ]
+        return max(commands, key=lambda c: (c["created_at"], c["id"]), default=None)
+
+    def post_comment(self, number, body):
+        comment = self.api(f"repos/{REPOSITORY}/issues/{number}/comments", body=body)
+        if (comment["user"]["login"] != OWNER or comment["body"] != body
+                or type(comment["id"]) is not int):
+            raise GitHubUnavailable(f"Could not verify owner-authored comment for #{number}.")
+        return comment["id"]
+
+    def transition(self, number, card, status, *, in_place_of, from_status):
+        latest = self.latest_status_command(number)
+        if not latest or latest["id"] != in_place_of:
+            raise GitHubUnavailable(f"#{number}: owner status command changed; will not overwrite it.")
+        if self.status(number, card) not in from_status:
+            raise GitHubUnavailable(f"#{number}: Project status changed; will not overwrite it.")
+        posted = self.post_comment(number, f"/status {status}")
+        for attempt in range(25):
+            current = self.status(number, card)
+            if current == status:
+                latest = self.latest_status_command(number)
+                if latest and latest["id"] == posted and latest["body"].strip() == f"/status {status}":
+                    return posted
+                raise GitHubUnavailable(f"#{number}: {status} command was superseded or cannot be verified.")
+            if current not in from_status:
+                break
+            if attempt < 24:
+                time.sleep(5)
+        raise GitHubUnavailable(
+            f"#{number}: {status} not verified (last board value: {current}); inspect "
+            "Sync GitHub Project Status, PROJECT_NUMBER and the owner comment before resuming.")
+
+
+def implementation_pr(pr, number):
+    return (closes_issue(pr["body"] or "", number)
+            or re.match(rf"agent/issue-{number}(?:-|$)", pr["head"]["ref"]))
+
+
+def queue_candidate(board, number, *, claim=None):
+    detail = board.issue(number)
+    if detail["state"] != "open":
+        raise Blocked("issue is not open")
+    if detail["assignees"]:
+        raise Blocked("has a GitHub assignee; not Developer-owned")
+    if not any(label["name"] == QUEUE_LABEL for label in detail["labels"]):
+        raise Blocked(f"missing {QUEUE_LABEL} assignment")
+    issue_type = (detail.get("type") or {}).get("name")
+    if issue_type == "Design Decision":
+        raise Blocked("Design Decision; human-owned")
+    if issue_type not in ISSUE_TYPES:
+        raise Blocked("missing/unknown native Type; use the metadata backfill")
+    if not (detail.get("body") or "").strip() or detail["locked"]:
+        raise Blocked("missing requirements or issue is locked")
+    graph = board.graph_issue(number)
+    command = board.latest_status_command(number)
+    if claim is None:
+        boundary = max([graph["lastEditedAt"] or ""]
+                       + [e["createdAt"] for e in graph["timelineItems"]["nodes"]])
+        if (not command or command["body"].strip().casefold() != "/status ready"
+                or command["updated_at"] != command["created_at"]
+                or command["created_at"] <= boundary):
+            raise Blocked("needs a fresh, unedited owner /status Ready after issue edits or reopening")
+    elif not command or command["id"] != claim or command["body"].strip() != "/status In Progress":
+        raise GitHubUnavailable(f"#{number}: owner changed or withdrew the claim.")
+    if graph["closedByPullRequestsReferences"]["totalCount"] != 0:
+        raise Blocked("existing linked implementation PR; inspect it instead")
+    fields = board.api(f"repos/{REPOSITORY}/issues/{number}/issue-field-values")
+    if not isinstance(fields, list):
+        raise GitHubUnavailable(f"Cannot verify issue fields for #{number}.")
+
+    def option(name):
+        values = [f for f in fields if f.get("issue_field_name") == name]
+        if len(values) == 1 and values[0]["data_type"] == "single_select":
+            return (values[0].get("single_select_option") or {}).get("name")
+        return None
+
+    priority, workstream = option("Priority"), option("Workstream")
+    if priority not in PRIORITIES or not workstream:
+        raise Blocked("missing/unknown native Priority or Workstream; use the metadata backfill")
+    native = set()
+    for dependency in board.api(
+            f"repos/{REPOSITORY}/issues/{number}/dependencies/blocked_by?per_page=100", pages=True):
+        linked = dependency["number"]
+        if dependency["html_url"] != f"https://github.com/{REPOSITORY}/issues/{linked}":
+            raise Blocked("external or unverifiable native prerequisite; reconcile with the owner")
+        native.add(linked)
+    dependencies = declared_prerequisites(detail["body"], native)
+    if number in dependencies:
+        raise Blocked("issue cannot depend on itself")
+    return {"number": number, "title": detail["title"], "body": detail["body"],
+            "url": detail["html_url"], "issue_type": issue_type,
+            "priority": priority, "workstream": workstream, "dependencies": dependencies,
+            "status_comment": command["id"], "last_edit": graph["lastEditedAt"]}
+
+
+def run_home(repo):
+    return repo.parent / f".{repo.name}-agent-runs"
+
+
+def local_assignment_exists(board, number, trees):
+    return ((run_home(board.repo) / f"issue-{number}").exists()
+            or any((run_home(board.repo)).glob(f"issue-{number}-review-pr-*"))
+            or any(re.match(rf"(?:{re.escape(board.repo.name)}-(?:agent|review|issue)-{number}(?:-|$))",
+                            tree["path"].name)
+                   or re.match(rf"refs/heads/agent/issue-{number}(?:-|$)", tree.get("branch", ""))
+                   for tree in trees))
+
+
+def open_prs(board):
+    return board.api(f"repos/{REPOSITORY}/pulls?state=open&per_page=100", pages=True)
+
+
+def queue_snapshot(board):
+    ready = board.ready()
+    candidates, eligible, accepted = {}, [], {}
+    prs, trees = open_prs(board), registered_worktrees(board.repo)
+    for number, card in sorted(ready.items()):
+        try:
+            if local_assignment_exists(board, number, trees):
+                raise Blocked("local run/worktree exists; resolve manually")
+            if any(implementation_pr(pr, number) for pr in prs):
+                raise Blocked("implementation PR already open")
+            detail = candidates[number] = queue_candidate(board, number)
+        except GitHubUnavailable:
+            raise
+        except Blocked as exc:
+            print(f"SKIP #{number}: {exc}", flush=True)
+            continue
+        for dependency in sorted(detail["dependencies"]):
+            if dependency not in accepted:
+                accepted[dependency] = board.dependency(dependency)
+        waiting = sorted(n for n in detail["dependencies"] if not accepted[n])
+        if waiting:
+            print(f"WAIT #{number}: awaiting owner acceptance of "
+                  + ", ".join(f"#{n}" for n in waiting), flush=True)
+        else:
+            eligible.append((detail, card))
+    return sorted(eligible, key=lambda pair: (
+        -sum(pair[0]["number"] in c["dependencies"] for c in candidates.values()),
+        PRIORITIES.index(pair[0]["priority"]), pair[0]["number"]))
+
+
+def dispatch_ready(args, board, model, detail, card):
+    number = detail["number"]
+    state_dir = run_home(board.repo) / f"issue-{number}"
+    # Persist intent before posting. A killed runner must not silently reclaim.
+    state_dir.mkdir(parents=True, exist_ok=False)
+    state = state_dir / "state.json"
+    write_state(state, phase="claiming", issue=number, model=model, title=detail["title"],
+                project=board.number, card=card, ready_comment=detail["status_comment"],
+                prerequisites=sorted(detail["dependencies"]))
+    claim = None
+    interrupted = False
+
+    def before_build():
+        try:
+            current = queue_candidate(board, number, claim=claim)
+            if (current != {**detail, "status_comment": claim}
+                    or not all(board.dependency(n) for n in sorted(current["dependencies"]))
+                    or any(implementation_pr(pr, number) for pr in open_prs(board))
+                    or board.status(number, card) != "In Progress"):
+                raise Blocked("issue scope, prerequisites, PRs or board status changed since claim")
+        except Blocked as exc:
+            raise GitHubUnavailable(f"#{number}: claim could not be revalidated: {exc}") from exc
+
+    try:
+        claim = board.transition(number, card, "In Progress",
+                                 in_place_of=detail["status_comment"], from_status=("Ready",))
+        write_state(state, verified_status="In Progress", claim_comment=claim)
+        print(f"#{number}: verified In Progress on Project #{board.number}.", flush=True)
+        develop_and_review(args, board.repo, model, detail, state_dir, before_build=before_build)
+        handoff = board.transition(number, card, "In Review", in_place_of=claim,
+                                   from_status=("In Progress", "In Review"))
+        write_state(state, verified_status="In Review", handoff_comment=handoff)
+        print(f"#{number}: verified In Review on Project #{board.number}.", flush=True)
+    except (GitHubUnavailable, KeyError, TypeError, ValueError, IndexError) as exc:
+        write_state(state, phase="status_unverified", reason=str(exc))
+        raise
+    except (KeyboardInterrupt, Blocked) as exc:
+        interrupted = isinstance(exc, (Interrupted, KeyboardInterrupt))
+        reason = str(exc) or "Operator stopped the queue."
+        phase = "interrupted" if interrupted else "blocked"
+        write_state(state, phase=phase, reason=reason)
+        if claim is not None:
+            try:
+                # Use runner-owned text rather than echoing credential-bearing CLI output.
+                evidence = json.loads(state.read_text())
+                stage = evidence.get("failure_stage", "preparing")
+                board.post_comment(number, f"Queue run {phase} during {stage}. "
+                                   f"Inspect issue-{number}/state.json and the corresponding host transcript. "
+                                   "Use review-only if a PR exists; do not restart Build automatically.")
+                handoff = board.transition(number, card, "Blocked", in_place_of=claim,
+                                           from_status=("In Progress", "In Review"))
+                write_state(state, verified_status="Blocked", handoff_comment=handoff)
+                print(f"#{number}: verified Blocked on Project #{board.number}.", flush=True)
+            except GitHubUnavailable as status_error:
+                write_state(state, status_error=str(status_error))
+                raise
+        print(f"#{number} {phase.upper()}: {reason} Logs/state: {state_dir}", flush=True)
+        return 130 if interrupted else 2
+    else:
+        record_cleanup(board.repo, state, issue=number)
+    return 0
+
+
+def stop_queue(_signal, _frame):
+    raise KeyboardInterrupt
+
+
+def queue_mode(args):
+    repo = Path(args.repo).expanduser().resolve()
+    model = require_model(args.model)
+    version, help_text = host_preflight(repo)
+    if not all(flag in help_text for flag in ("--standalone", "--model", "--agent")):
+        raise Blocked("Installed OpenCode does not advertise the runner's required flags.")
+    models = run_cmd(["opencode", "models"], repo)
+    if model.split("#", 1)[0] not in models.splitlines():
+        raise Blocked("Configured model was not listed by OpenCode; verify the connected account/model.")
+    if not args.dry_run:
+        trees = registered_worktrees(repo)
+        if not trees or trees[0]["path"] != repo:
+            raise Blocked("Run the live queue against the primary checkout via --repo.")
+        for tree in trees[1:]:
+            path = tree["path"]
+            if (path.name.startswith((f"{repo.name}-agent-", f"{repo.name}-review-", f"{repo.name}-issue-"))
+                    or tree.get("branch", "").startswith("refs/heads/agent/issue-")):
+                if worktree_in_use(path):
+                    raise Blocked(f"An agent/review checkout is still in use: {path}.")
+    board = ReadyBoard(repo, args.project)
+    if board.api("user")["login"] != OWNER:
+        raise GitHubUnavailable(f"Queue requires gh authentication as {OWNER}.")
+    configured = run_cmd(["gh", "variable", "get", "PROJECT_NUMBER", "--repo", REPOSITORY], repo)
+    if configured != str(args.project):
+        raise GitHubUnavailable("--project must match the status workflow's PROJECT_NUMBER.")
+    print(f"Queue preflight: Project #{args.project}; OpenCode {version}; model {model}.", flush=True)
+    while True:
+        eligible = queue_snapshot(board)
+        if args.dry_run:
+            print("DRY RUN: eligible in order: "
+                  + (", ".join(f"#{d['number']}" for d, _ in eligible) or "(none)")
+                  + ". No writes or AI sessions.")
+            return 0
+        if not eligible:
+            if args.once:
+                print("No eligible Ready issues; no assignment started.", flush=True)
+                return 0
+            print(f"No eligible Ready issues; idle for {args.poll_seconds}s.", flush=True)
+            time.sleep(args.poll_seconds)
+            continue
+        detail, card = eligible[0]
+        number = detail["number"]
+        # A checkout/origin failure is a host problem, not a failure of this assignment.
+        run_cmd(["git", "fetch", "origin", BASE_BRANCH], repo, timeout=120)
+        run_cmd(["git", "rev-parse", "--verify", f"origin/{BASE_BRANCH}"], repo)
+        try:
+            current = queue_candidate(board, number)
+        except GitHubUnavailable:
+            raise
+        except Blocked as exc:
+            print(f"SKIP #{number}: eligibility changed before claim: {exc}", flush=True)
+            continue
+        if (current != detail
+                or not all(board.dependency(n) for n in sorted(current["dependencies"]))
+                or any(implementation_pr(pr, number) for pr in open_prs(board))
+                or local_assignment_exists(board, number, registered_worktrees(repo))
+                or board.status(number, card) != "Ready"):
+            continue
+        result = dispatch_ready(args, board, model, detail, card)
+        if args.once or result == 130:
+            return result
+
+
+@contextmanager
+def runner_lock():
+    """One writer on this host/account, even across linked worktrees/clones."""
+    path = Path.home() / ".local/state/the-producer/runner.lock"
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with path.open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Blocked(f"Another runner is active ({path}).") from exc
+        yield
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -765,12 +1317,41 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", help="explicit OpenAI model ID from OpenCode")
     parser.add_argument("--dry-run", action="store_true", help="preflight only; no writes or AI runs")
     parser.add_argument("--approve-issue", action="store_true", help="authorize this issue's execution")
+    parser.add_argument("--queue", action="store_true", help="opt in to the owner-authorized Ready queue")
+    parser.add_argument("--project", type=int, help="owner Project number (must match PROJECT_NUMBER)")
+    parser.add_argument("--poll-seconds", type=int, help="idle interval (default: 60 seconds)")
+    parser.add_argument("--once", action="store_true", help="queue: attempt at most one assignment, no idle wait")
     parser.add_argument("--retry-blocked", action="store_true",
                         help="archive a previous blocked run with no PR after safe cleanup")
     parser.add_argument("--review-pr", type=int, help="independently review an existing open PR without running Build")
     parser.add_argument("--timeout-minutes", type=int, default=60,
                         help="timeout per model session (default: 60)")
     args = parser.parse_args(argv)
+    if args.queue:
+        if (args.issue is not None or args.approve_issue or args.cleanup_worktrees
+                or args.retry_blocked or args.review_pr is not None or not args.model
+                or not args.project or args.project < 1 or not 1 <= args.timeout_minutes <= 180
+                or (args.poll_seconds is not None and args.poll_seconds < 1)
+                or (args.once and args.dry_run)):
+            parser.error("--queue requires --project and --model; use --dry-run or --once, or poll continuously")
+        args.poll_seconds = args.poll_seconds or 60
+        previous = signal.signal(signal.SIGTERM, stop_queue)
+        try:
+            if args.dry_run:
+                return queue_mode(args)
+            with runner_lock():
+                return queue_mode(args)
+        except KeyboardInterrupt:
+            print("Queue interrupted; no further assignments. Inspect retained run state if a claim started.",
+                  file=sys.stderr)
+            return 130
+        except (Blocked, OSError, KeyError, ValueError, TypeError, IndexError) as exc:
+            print(f"QUEUE STOPPED: {exc}", file=sys.stderr)
+            return 2
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+    if args.project is not None or args.poll_seconds is not None or args.once:
+        parser.error("--project, --poll-seconds and --once require --queue")
     if args.cleanup_worktrees:
         if (args.issue is not None or args.model or args.dry_run or
                 args.approve_issue or args.retry_blocked or args.review_pr is not None):
@@ -783,9 +1364,10 @@ def main(argv: list[str] | None = None) -> int:
             remote = run_cmd(["git", "remote", "get-url", "origin"], repo)
             if not re.search(r"(?:github\.com[:/])williamwhorton/The-Producer(?:\.git)?$", remote):
                 raise Blocked("Origin is not the expected The-Producer repository.")
-            _, retained = cleanup_worktrees(repo)
+            with runner_lock():
+                _, retained = cleanup_worktrees(repo)
             return 2 if retained else 0
-        except Blocked as exc:
+        except (Blocked, OSError) as exc:
             print(f"BLOCKED: {exc}", file=sys.stderr)
             return 2
     if args.retry_blocked and args.dry_run:
@@ -795,8 +1377,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.review_pr is not None and (args.review_pr < 1 or args.retry_blocked or args.approve_issue):
         parser.error("--review-pr requires an open PR number and cannot perform development/retry")
     try:
-        return review_existing_pr(args) if args.review_pr is not None else orchestrate(args)
-    except Blocked as exc:
+        execute = review_existing_pr if args.review_pr is not None else orchestrate
+        if args.dry_run:
+            return execute(args)
+        with runner_lock():
+            return execute(args)
+    except (Blocked, OSError) as exc:
         print(f"BLOCKED: {exc}", file=sys.stderr)
         return 2
 

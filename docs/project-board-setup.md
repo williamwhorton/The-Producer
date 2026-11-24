@@ -90,14 +90,16 @@ The board is **not** expected to be maintained by the Creative Director manually
 
 ## Ready versus Backlog — including Creative Director decisions
 
-**Ready** means a bounded, approved-to-investigate **task, Spike or Design Decision can begin now** without needing an unfinished issue's deliverable. It is **not** limited to the next available agent implementation slot. The Creative Director may work Ready decision stories **concurrently** with Developer/Architect/Lead agents; assign those issues to `williamwhorton` so they are visible as human-owned decisions.
+**Ready** is a rolling two-day planning queue, not an assertion that every card can start now. An approved prerequisite and its dependent may both be queued; the dependent stays Ready until the prerequisite is accepted. The two-day horizon is a triage convention, not an automated expiry. The Creative Director may work Ready decision stories concurrently with implementation; assign them to `williamwhorton`.
 
 - **Readiness is not creative approval.** An unblocked Design Decision can be Ready for research/decision while every implementation story that depends on its result remains in Backlog or Blocked.
 - **Backlog** contains concrete, traceable *future* MVP work across every function from design through release, including stories that are not yet Ready due to dependencies, sequencing or current priorities.
 - **Blocked** records an actual, specific impediment to work underway or selected for execution. An unscheduled future issue with dependencies can remain Backlog rather than cluttering Blocked.
 - **In Progress** begins only when work actually starts; **In Review** means review/approval awaits; **Done** needs acceptance.
 - Keep a **complete release path**, not merely a near-term sprint queue. The Lead maintains [MVP-to-release delivery plan](mvp-delivery-plan.md), reviews requirement coverage regularly, avoids duplicate issues, and adds bounded work/spikes when a real gap arises.
-- An independently startable Spike that unlocks later tasks can move Ready immediately, even if downstream work must wait; update dependencies and status after decisions land.
+- Queue dispatch requires the actual `agent:developer` repository label **and no GitHub assignee**. An assignee overrides the label; Design Decisions are never dispatched. Set native Type, Priority and Workstream (use the [existing backfill](issue-metadata-migration.md) for missing values), then post a fresh standalone `/status Ready` as `williamwhorton` after any relevant issue edit or reopening. The actual card must also be Ready. This authorizes the bounded issue, not unapproved design.
+- Prefer native **Blocked by** issue links. If all prerequisites are already in native links and no legacy declaration needs reconciliation, no extra line is needed. Otherwise replace legacy prose with exactly one standalone issue-body line, `Queue prerequisites: #27, #29` (same-repository issues), or `Queue prerequisites: none` after verifying the issue has no prerequisites. The explicit list must include every native blocker. Turn unresolved artifact or approval requirements into tracked prerequisites before authorizing the issue; do not write `none` to bypass them.
+- Use an owner-merged closing PR to `main` or an owner **Completed** closure for an accepted non-PR deliverable/decision. Record the actual decision or acceptance in the issue or its PR. `Done`, a technically approved open PR, and `not planned` are not approval. To supersede a prerequisite, the owner records why, replaces it in both native links and the declaration (if used), and reauthorizes with `/status Ready`; the replacement must pass the same acceptance gate.
 - New work from design changes, prototype evidence, playtests and release review is added through normal issue triage; don't invent approvals, exact content counts, estimates or deadlines.
 
 
@@ -105,7 +107,7 @@ Keep the board's **Status** values:
 
 `Backlog` → `Ready` → `In Progress` → `In Review` → `Done`
 
-Use `Blocked` whenever an unresolved dependency prevents progress. A blocked High-priority issue stays blocked until its prerequisite is approved. The board should be grouped by Status.
+Use `Blocked` for a concrete blocker on work that has started or needs intervention. A queued successor simply waits in Ready and is not eligible until its prerequisites are accepted. The board should be grouped by Status.
 
 Do not automatically move issues to Done when a PR opens. Done requires acceptance criteria, actual test evidence and independent review under `AGENTS.md`.
 
