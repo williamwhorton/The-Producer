@@ -9,7 +9,7 @@
 | G-03 | CONFIRMED | Isometric/dollhouse presentation. | Visual prototype review |
 | G-04 | CONFIRMED | Horror is primary; humor is organic tonal contrast. | Narrative/art direction review |
 | G-05 | CONFIRMED | Supernatural forces develop independent behavior that can conflict with producer goals. | Autonomous-event scenarios |
-| G-06 | CONFIRMED | Player has imperfect information about contestant attitudes, knowledge and plans. | UI/data-access tests |
+| G-06 | CONFIRMED | Player has imperfect information about contestants' inner attitudes, knowledge and plans, despite complete camera visibility of the house and clickable observed conversations. | UI/data-access and speech-vs-belief leakage tests |
 | G-07 | CONFIRMED | Contestants can avoid, investigate, defend against, banish/exorcise, and potentially neutralize supernatural entities. | Behavioral scenario tests |
 | G-08 | CONFIRMED | Distinct operations/chapters may take place at different locations with varying casts and constraints; no real TV seasons are required. | Data-driven scenario tests |
 | G-09 | CONFIRMED | Cross-season artifacts are optional, not required for successful play. | Artifact-free season feasibility tests |
@@ -18,6 +18,10 @@
 | G-12 | CONFIRMED — REVISED (#1) | Operating again in future locations must reckon with external exposure, contestant fates and the organization's ability to continue; TV-franchise credibility is not a requirement. Exact viability mechanics remain OPEN. | Multi-operation continuity/narrative checks once approved |
 | G-13 | OPEN | Whether a contestant must survive, win, or whether all must die is undecided; no survivor gate or mandatory death quota is approved. | Decide under #7/P-02 before scenario validation |
 | G-14 | CONFIRMED | Departures, enforced removals, deaths and unexplained disappearances have credible consequences for contestants and the wider world; no convenient universal cover-up is assumed. | Narrative/system review of contestants, witnesses and external scrutiny |
+| O-01 | CONFIRMED (#16, ADR-0005) | Hidden cameras give the producer full observational visibility into all rooms of the house, supplying the diegetic basis for the dollhouse view; this does not reveal private thoughts or unobserved off-site activity. | Authorized house view covers all test rooms, never private-state fields |
+| O-02 | CONFIRMED (#16, ADR-0005) | The producer can hear relevant house sounds, including door opening and closing. | House auditory events, no unauthorized off-site sound |
+| O-03 | CONFIRMED (#16, ADR-0005) | In-house conversations display bubbles that the player clicks to read speech details; dialogue text is not shown automatically, and speech is not the same as private beliefs. | Visible indicator, on-click observed text, no hidden-belief leak |
+| O-04 | CONFIRMED (#16, ADR-0005) | Contestants have one shared house phone and are not allowed cell phones; phone-use bubbles can be clicked for text/details. Exact remote-side availability, logs and ban enforcement are OPEN. | One phone in default scenario; phone indicator + source-limited click details |
 | S-01 | PROPOSED | Contestants have private beliefs, memory, motives, relationships and observable behaviors. | State transition tests |
 | S-02 | PROPOSED | Fear and suspicion of producer wrongdoing are modeled separately. | Counterexample scenarios |
 | S-03 | PROPOSED | Supernatural entities have consistent drives and bounded agency rather than arbitrary random actions. | Seeded reproducibility and causal trace |
