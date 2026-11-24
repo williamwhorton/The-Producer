@@ -4,9 +4,13 @@
 The production begins by fabricating haunting effects, but psychic energy produces genuine supernatural activity. With progression, manifestations can act autonomously and pursue goals that do not align with the producer's need to retain contestants or preserve secrecy.
 
 ## Three activity classes [PROPOSED]
-1. **Practical effects:** player-controlled, logistical costs, detectable mechanisms.
+1. **Practical effects:** player-controlled **when plausibly prepared**, with candidate logistical costs and discoverable mechanisms. Issue #16/ADR-0006 confirms pre-contest house access and physically grounded preparation/triggering **as a design direction**, not an exact device inventory, detection system or numerical cost schedule.
 2. **Influenced manifestations:** player can attempt to direct, with uncertain outcomes.
 3. **Autonomous entities:** select actions according to drives, attachments, constraints and local state.
+
+## Separation from producer-installed effects [CONFIRMED boundary]
+
+The producer begins with mundane preparation and interventions such as manipulated household objects, hidden sound effects, lights or window movements. Effects require a credible prepared or otherwise authorized physical means; they **do not** turn the producer into an omnipotent ghost. Nighttime house entry for staging objects and holographic ghost illusions are **proposed possibilities**, not confirmed player actions. Once true supernatural activity develops, its own rules and autonomy matter independently of the producer's preinstalled devices. See [ADR-0006](../decisions/ADR-0006-producer-preparation-and-practical-effects.md) and Issue #6 for unresolved supernatural limits.
 
 ## Entity model [PROPOSED]
 Traits such as aggression, territoriality, fixation, volatility, responsiveness and independence. A drive/goal selection mechanism should produce legible but not perfectly predictable behavior. Examples are poltergeist, apparition and place-bound spirit; taxonomy not final.

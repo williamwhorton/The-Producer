@@ -4,7 +4,7 @@
 
 ## Preferred boundaries
 - **Simulation domain:** contestants, relationships, beliefs, movement, supernatural entities, producer interventions and deterministic event scheduling.
-- **Observation boundary:** transforms actual world events into production-observable evidence and estimates. Never bypass it for player UI.
+- **Observation boundary:** transforms actual world events into production-observable evidence and estimates. Never bypass it for player UI. **Approved #16/ADR-0005 baseline:** the producer's hidden surveillance provides visual coverage of every house room; door/environment sounds and bubble-inspected in-house dialogue are authorized observational channels. One house telephone exists and contestants are prohibited cell phones. Only captured speech/call portions may pass into the UI; no private thought or unmonitored off-site knowledge leaks.
 - **World presentation:** fixed-angle 3D orthographic dollhouse as the provisional renderer; camera, mesh, lighting, floor cutaway, selection and visual effects stay renderer-specific, behind a small replaceable presentation interface (2D fallback retained).
 - **UI / producer tools:** HUD, accessible controls and workflow are distinct from the world renderer and domain logic; consume approved observations, stable IDs and application actions, never private world internals or renderer node references for game decisions.
 - **Campaign/persistence:** scenario definitions, season outcomes, operation-continuity and external-exposure state, contestant disposition, artifact provenance, unlocks and save/load.
@@ -24,6 +24,10 @@ Central seeded random stream(s), explicit tick/event ordering, stable serializat
 ## Approved observation boundary — Issue #3
 
 [ADR-0004](decisions/ADR-0004-producer-observation-boundary.md) **approves a source-mediated, allowlisted evidence projection** between private world events and all producer-facing world renderers, HUD panels, optional off-site narrative vignettes and reports (Creative Director, 2026-11-23 ET). An unobserved event remains private; a witness or staff account conveys an **attributed claim**, not omniscient truth. Exact surveillance, reporting, confidence and producer-action mechanics are deliberately deferred. The game should not grant a dollhouse renderer omniscient access to unobserved contestant behavior simply because its simulation includes that state.
+
+## Producer dossier information boundary [CONFIRMED direction]
+
+Each contestant starts with an authorized, pre-researched **producer dossier**: picture, age, sex, occupation, extremely brief background and **any known** exploitable fear or significant event. **Some dossiers have no known hook**. This is historical/background information gathered in advance by the producer, not a way to query current hidden emotions, beliefs, memories, plans or precise numerical state. Dossier facts are source-allowlisted for player presentation under ADR-0004; **recruiting/selecting contestants and researching backgrounds are future proposed mechanics**, not part of the initial player loop. Personalized overnight options depend on dossier facts where available. See [ADR-0006](decisions/ADR-0006-producer-preparation-and-practical-effects.md).
 
 ## Non-leakage architecture [REQUIRED]
 Separate private world state from observable production state. Player-facing views should consume only sanctioned observation/estimate interfaces. Add tests for accidental exposure through API, serialization, debug overlays and logs.
