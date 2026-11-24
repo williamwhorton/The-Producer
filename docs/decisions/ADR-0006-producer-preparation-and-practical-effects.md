@@ -126,6 +126,19 @@ The Creative Director evaluated **three ways** to constrain quick, nonstructural
 
 **Critical distinction:** fear, belief in a real haunting, and suspicion of human staging need not move together (G-06; candidate S-02). A cluster of apparent disturbances could make one contestant more convinced of ghosts, and another suspicious of a prank. The producer still succeeds at performing allowed staging unseen. **The flat quota and one-slot cost are approved; the numeric quota, eligibility windows and difficulty scaling are not.** No abstract time budget, suspicion-as-action-cost formula, or forced equal contestant outcomes is approved.
 
+## Cast-specific personal triggers drive the overnight menu [CONFIRMED direction]
+
+Every contestant has **at least one meaningful phobia or personal history/association** connected with an object, person, memory or idea. **Available overnight minor-alteration choices derive from those contestant-specific associations**, not a universal list of generic scary props. Creative Director examples:
+
+- **Doll phobia:** place or move a doll somewhere the targeted contestant may encounter it.
+- **Deceased family member:** leave a photograph of that family member in an unexpected location.
+
+The producer may plausibly know personal background from casting, vetting or research, but **the actual source and player-facing presentation of these facts remain OPEN**. A background fact available to the producer is not permission to expose a contestant's hidden thoughts, current belief or precise psychological state (ADR-0004).
+
+Each candidate still needs a plausible **quick, nonstructural** alteration; a personalized effect requiring equipment is part of **pre-contest preparation**, not an unlimited overnight install. Each qualified choice uses **one slot** of the approved flat nightly count and is staged unseen. Contestants' reactions remain autonomous and can vary: fear, grief, anger, curiosity, investigation or suspicion of a prank. The idea that **every offered option is guaranteed to significantly affect at least one contestant remains PROPOSED (A-11)**, not a guarantee of fear or any specific reaction. Personal associations make consequences plausible and support balancing comparable value.
+
+**Still open:** how many hooks a contestant may have, which personal facts the producer knows, menu visibility and target selection, what counts as “significant,” and whether effects can be delayed until later discovery.
+
 ### Possible guaranteed meaningful consequence — Creative Director suggestion [PROPOSED]
 
 Because **each overnight alteration uses one of a small, fixed number of slots**, the Creative Director raised the possibility that **every offered option is guaranteed to have a significant effect on at least one contestant**. This is a **proposal**, not an approved NPC-outcome rule or tuning threshold.
@@ -134,7 +147,7 @@ Because **each overnight alteration uses one of a small, fixed number of slots**
 
 **Potential implementation approach [PROPOSED]:** make the **menu of eligible alterations context-aware**: only offer an action in the circumstances where at least one contestant can meaningfully encounter or be affected by the result, or design the staged event to reliably elicit a meaningful *but variable* reaction. A mere ornamental prop that no one encounters should not consume one of the scarce action slots **if a hard impact guarantee is adopted**. This may require balancing, scenario authoring, targeting rules or validation rather than forcing NPC psychology.
 
-**Unresolved:** How to define/test a “significant effect” without covertly scripting contestant choices or exposing hidden state; whether the promise must be immediate or may be fulfilled upon later discovery; what happens when contestants leave or circumstances change after the nightly choice; and whether all eligible options are guaranteed or merely strongly likely to matter. No numerical magnitude or hard-gating implementation is approved.
+**Unresolved:** How to define/test a “significant effect” without covertly scripting contestant choices or exposing hidden state; whether the promise must be immediate or may be fulfilled upon later discovery; what happens when contestants leave or circumstances change after the nightly choice; and whether all eligible options are guaranteed or merely strongly likely to matter. **Cast-specific personal triggers are CONFIRMED as the source of available options; guaranteed impact is still PROPOSED.** No numerical magnitude or hard-gating implementation is approved.
 
 ## Decisions still needed in #16
 
