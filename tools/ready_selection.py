@@ -1,6 +1,7 @@
 """Read-only Developer selection policy for read_ready.py --select."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import re
 
@@ -272,7 +273,13 @@ def dependency_waits(blockers, read, closures):
     return waits
 
 
-def selection_lines(numbers, read_issue, read):
+@dataclass
+class Selection:
+    eligible: list[int]
+    lines: list[str]
+
+
+def select(numbers, read_issue, read):
     labels, skipped, candidates, waits = {}, {}, {}, {}
     for number in sorted(set(numbers)):
         issue, fields, blockers = read_issue(number)
@@ -324,4 +331,4 @@ def selection_lines(numbers, read_issue, read):
         elif waits[number]:
             reasons = "; ".join(f"{ref}: {reason}" for (_, ref), reason in waits[number].items())
             lines.append(f"WAIT {label}: {reasons}")
-    return lines
+    return Selection(eligible, lines)

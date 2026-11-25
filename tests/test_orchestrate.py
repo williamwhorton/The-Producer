@@ -280,6 +280,50 @@ class FlowTests(unittest.TestCase):
             with self.assertRaisesRegex(mod.Blocked, 'Existing run'):
                 mod.orchestrate(self.args)
 
+    def test_pilot_stops_before_build_if_claim_no_longer_verified(self):
+        def check(number, status):
+            self.assertEqual((number, status), (14, 'In Progress'))
+            raise mod.Blocked('owner withdrew claim')
+
+        with (patch.object(mod, 'preflight', return_value=self.issue),
+              patch.object(mod, 'run_cmd'),
+              patch.object(mod, 'verify_checkout'),
+              patch.object(mod, 'run_agent') as agent,
+              patch.object(mod, 'cleanup_worktrees') as cleanup,
+              patch.object(mod, 'secrets') as secrets):
+            secrets.token_hex.return_value = 'abcd'
+            claims = []
+            with self.assertRaisesRegex(mod.Blocked, 'owner withdrew claim'):
+                mod.orchestrate(self.args, claim=claims.append, verify_status=check)
+            self.assertEqual(claims, [14])
+            agent.assert_not_called()
+            cleanup.assert_not_called()
+        state = self.repo.parent / '.The-Producer-agent-runs/issue-14/state.json'
+        self.assertEqual(json.loads(state.read_text())['phase'], 'blocked')
+
+    def test_pilot_keeps_review_artifacts_if_board_handoff_fails(self):
+        sha = 'a' * 40
+        def check(number, status, *, pending=None):
+            if status == 'In Review':
+                raise mod.Blocked('In Review not verified')
+
+        with (patch.object(mod, 'preflight', return_value=self.issue),
+              patch.object(mod, 'run_cmd', return_value=sha),
+              patch.object(mod, 'verify_checkout'),
+              patch.object(mod, 'pr_details', return_value=sample_pr()),
+              patch.object(mod, 'run_agent', side_effect=['Implemented', 'REVIEW_VERDICT: APPROVE']) as agent,
+              patch.object(mod, 'cleanup_worktrees') as cleanup):
+            with self.assertRaisesRegex(mod.Blocked, 'In Review not verified'):
+                mod.orchestrate(self.args, claim=lambda number: None, verify_status=check)
+            self.assertEqual(agent.call_count, 2)
+            self.assertIn('Do not post /status comments', agent.call_args_list[0].args[0][-1])
+            cleanup.assert_not_called()
+        state = self.repo.parent / '.The-Producer-agent-runs/issue-14/state.json'
+        data = json.loads(state.read_text())
+        self.assertEqual((data['phase'], data['last_verdict'], data['head_sha']),
+                         ('blocked', 'APPROVE', sha))
+        self.assertEqual(data['pr'], sample_pr()['url'])
+
 
 
 class ReviewOnlyTests(unittest.TestCase):

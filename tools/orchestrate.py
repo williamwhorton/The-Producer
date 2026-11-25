@@ -646,7 +646,7 @@ def review_existing_pr(args: argparse.Namespace) -> int:
             write_state(state_file, cleanup_pending=[str(exc)])
 
 
-def orchestrate(args: argparse.Namespace) -> int:
+def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not repo.is_dir():
         raise Blocked(f"Repository directory not found: {repo}")
@@ -677,18 +677,27 @@ def orchestrate(args: argparse.Namespace) -> int:
     run_id = f"{issue}-{stamp}-{secrets.token_hex(3)}"
     branch = f"agent/issue-{issue}-{stamp.lower()}-{secrets.token_hex(2)}"
     dev = repo.parent / f"{repo.name}-agent-{run_id}"
+    board_managed = claim is not None
+    board_instruction = (" The host pilot owns Project status for this assignment. "
+                         "Do not post /status comments or edit the Project card."
+                         if board_managed else "")
+    if board_managed:
+        claim(issue)
     state_dir.mkdir(parents=True, exist_ok=False)
     state_file = state_dir / "state.json"
     write_state(state_file, phase="starting", issue=issue, title=info["title"],
                 model=model, branch=branch, development_worktree=str(dev),
                 created_at=stamp, approved_by_human=True)
     print(f"Run log/state: {state_dir}")
+    completed = False
     try:
         run_cmd(["git", "worktree", "add", "-b", branch, str(dev),
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
         verify_checkout(dev, expected_branch=branch)
-        prompt = developer_prompt(issue, branch, dev)
+        prompt = developer_prompt(issue, branch, dev) + board_instruction
+        if verify_status is not None:
+            verify_status(issue, "In Progress")
         run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model", model,
                    prompt], dev, state_dir / "developer-0.log", args.timeout_minutes * 60)
         verify_checkout(dev, expected_branch=branch)
@@ -721,7 +730,15 @@ def orchestrate(args: argparse.Namespace) -> int:
                 raise Blocked("PR head changed during review; verdict is stale.")
             write_state(state_file, last_verdict=verdict)
             if verdict == "APPROVE":
+                if verify_status is not None:
+                    print(f"Technical review: {verdict}; {pr['url']} at {pr['headRefOid']}; logs: {state_dir}")
+                    verify_status(issue, "In Review", pending="In Progress")
+                    # The PR can change while the status workflow catches up.
+                    latest = pr_details(branch, issue, repo)
+                    if (latest["number"], latest["headRefOid"]) != (pr["number"], pr["headRefOid"]):
+                        raise Blocked("PR number or head changed during Project handoff; verdict is stale.")
                 write_state(state_file, phase="ready_for_human_acceptance")
+                completed = True
                 print(f"READY FOR YOUR ACCEPTANCE: {pr['url']}")
                 print(f"Issue #{issue}, verified PR head {pr['headRefOid']}, "
                       f"review verdict {verdict}; logs: {state_dir}")
@@ -735,8 +752,11 @@ def orchestrate(args: argparse.Namespace) -> int:
                 raise Blocked("Independent review still requests changes after one correction cycle.")
             write_state(state_file, phase="correcting")
             verify_checkout(dev, expected_branch=branch)
+            prompt = correction_prompt(issue, pr, review_text) + board_instruction
+            if verify_status is not None:
+                verify_status(issue, "In Review")
             run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
-                       model, correction_prompt(issue, pr, review_text)], dev,
+                       model, prompt], dev,
                       state_dir / "developer-1.log", args.timeout_minutes * 60)
             verify_checkout(dev, expected_branch=branch)
             updated = pr_details(branch, issue, repo)
@@ -749,12 +769,14 @@ def orchestrate(args: argparse.Namespace) -> int:
         write_state(state_file, phase="blocked", reason=str(exc))
         raise
     finally:
-        try:
-            _, retained = cleanup_worktrees(repo)
-            write_state(state_file, cleanup_pending=retained)
-        except (Blocked, OSError) as exc:
-            print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
-            write_state(state_file, cleanup_pending=[str(exc)])
+        if not board_managed or completed:
+            try:
+                _, retained = (cleanup_worktrees(repo, issue=issue) if board_managed
+                               else cleanup_worktrees(repo))
+                write_state(state_file, cleanup_pending=retained)
+            except (Blocked, OSError) as exc:
+                print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
+                write_state(state_file, cleanup_pending=[str(exc)])
 
 
 def main(argv: list[str] | None = None) -> int:

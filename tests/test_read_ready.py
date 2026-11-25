@@ -128,6 +128,17 @@ class ReadReadyTests(unittest.TestCase):
                 self.assertEqual((code, out), (1, ""))
                 self.assertIn(message, err)
 
+    def test_pilot_reads_multiple_statuses_from_one_project_snapshot(self):
+        page = project_page(item(14, status="progress-id"), item(15),
+                            item(16, repo="other/repository", status="progress-id"))
+        project = page["data"]["user"]["projectV2"]
+        project["field"]["options"].append({"name": "In Progress", "id": "progress-id"})
+        with patch.object(read_ready, "gh_json", return_value=[page]):
+            _, _, cards = read_ready.project_issues(7, status_names=("Ready", "In Progress"))
+            self.assertEqual(cards, {"Ready": [15], "In Progress": [14]})
+            with self.assertRaisesRegex(read_ready.ReadError, "one In Review option"):
+                read_ready.project_issues(7, status_names=("Ready", "In Review"))
+
     def test_configuration_and_api_failures_never_print_empty_or_partial_reports(self):
         code, out, err, calls = self.run_cli(number="")
         self.assertEqual((code, out, calls), (2, "", []))

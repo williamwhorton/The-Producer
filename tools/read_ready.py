@@ -9,9 +9,9 @@ import subprocess
 import sys
 
 if __package__:
-    from .ready_selection import SelectionError, selection_lines
+    from .ready_selection import SelectionError, select
 else:
-    from ready_selection import SelectionError, selection_lines
+    from ready_selection import SelectionError, select
 
 OWNER = "williamwhorton"
 REPOSITORY = f"{OWNER}/The-Producer"
@@ -87,14 +87,14 @@ def gh_json(context, *args, missing_issue_ok=False):
         raise ReadError(f"{context}: GitHub returned invalid JSON") from error
 
 
-def ready_project(number):
+def project_issues(number, *, status_names=("Ready",)):
     pages = gh_json(
         f"Project #{number}", "graphql", "--paginate", "--slurp", "-f",
         f"query={PROJECT_QUERY}", "-f", f"owner={OWNER}", "-F", f"number={number}",
     )
     if not isinstance(pages, list) or not pages:
         raise ReadError("GitHub returned no Project pages")
-    numbers = []
+    numbers = {name: [] for name in status_names}
     for index, page in enumerate(pages):
         if page.get("errors"):
             raise ReadError(f"Project #{number}: GitHub GraphQL API error; check project access")
@@ -102,24 +102,35 @@ def ready_project(number):
         if not project:
             raise ReadError(f"Project #{number} not found for {OWNER}; check PROJECT_NUMBER and access")
         options = (project["field"] or {}).get("options", [])
-        ready = [option["id"] for option in options if option["name"] == "Ready"]
-        if len(ready) != 1:
-            raise ReadError(f"Project #{number}: expected one Ready option in the Status field")
+        requested = {}
+        for name in status_names:
+            ids = [option["id"] for option in options if option["name"] == name]
+            if len(ids) != 1 or not ids[0] or ids[0] in requested:
+                raise ReadError(f"Project #{number}: expected one {name} option in the Status field")
+            requested[ids[0]] = name
         items = project["items"]
         if items["pageInfo"]["hasNextPage"] is not (index < len(pages) - 1):
             raise ReadError(f"Project #{number}: incomplete or inconsistent item pagination")
         for item in items["nodes"]:
             status = (item["fieldValueByName"] or {}).get("optionId")
-            if item["type"] == "REDACTED" and status in (None, ready[0]):
-                raise ReadError(f"Project #{number}: an inaccessible item may be a Ready issue")
-            if item["type"] != "ISSUE" or status != ready[0]:
+            if item["type"] == "REDACTED" and (status is None or status in requested):
+                raise ReadError(f"Project #{number}: an inaccessible item may be a "
+                                f"{requested.get(status, '/'.join(status_names))} issue")
+            if item["type"] != "ISSUE" or status not in requested:
                 continue
             issue = item["content"]
             if not issue:
-                raise ReadError(f"Project #{number}: Ready issue content is unavailable")
+                raise ReadError(f"Project #{number}: {requested[status]} issue content is unavailable")
             if issue["repository"]["nameWithOwner"].casefold() == REPOSITORY.casefold():
-                numbers.append(issue["number"])
+                numbers[requested[status]].append(issue["number"])
     return project["title"], project["url"], numbers
+
+
+def configured_project():
+    number = os.environ.get("PROJECT_NUMBER", "").strip()
+    if not re.fullmatch(r"[0-9]{1,10}", number) or not 0 < int(number) < 2**31:
+        raise ValueError("Configuration error: set PROJECT_NUMBER to a positive GitHub Project number.")
+    return int(number)
 
 
 def issue_data(number, suffix="", *, paginate=False):
@@ -188,15 +199,17 @@ def main():
     parser.add_argument("--select", action="store_true",
                         help="rank eligible Developer issues without starting work")
     args = parser.parse_args()
-    number = os.environ.get("PROJECT_NUMBER", "").strip()
-    if not re.fullmatch(r"[0-9]{1,10}", number) or not 0 < int(number) < 2**31:
-        print("Configuration error: set PROJECT_NUMBER to a positive GitHub Project number.", file=sys.stderr)
+    try:
+        number = configured_project()
+    except ValueError as error:
+        print(error, file=sys.stderr)
         return 2
     try:
-        title, url, numbers = ready_project(int(number))
+        title, url, statuses = project_issues(number)
+        numbers = statuses["Ready"]
         # Do not print a successful-looking partial report if a later read fails.
         if args.select:
-            lines = selection_lines(numbers, ready_issue, gh_json)
+            lines = select(numbers, ready_issue, gh_json).lines
         else:
             lines = [line for issue in numbers for line in issue_lines(issue)]
     except (ReadError, SelectionError) as error:
