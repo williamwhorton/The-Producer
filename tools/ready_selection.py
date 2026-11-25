@@ -185,10 +185,11 @@ def native_options(fields, name, *, allow_multiple=False):
     if len(rows) > 1:
         return None
     row = rows[0]
-    if row.get("data_type") == "single_select" and not row.get("multi_select_options"):
+    if (row.get("data_type") == "single_select"
+            and row.get("multi_select_options") in (None, [])):
         options = [row.get("single_select_option")]
     elif (allow_multiple and row.get("data_type") == "multi_select"
-          and not row.get("single_select_option")):
+          and row.get("single_select_option") is None):
         options = row.get("multi_select_options")
     else:
         return None

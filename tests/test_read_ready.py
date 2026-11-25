@@ -136,6 +136,13 @@ class ReadReadyTests(unittest.TestCase):
                 self.assertEqual((code, err), (0, ""))
                 self.assertIn("Workstream: (unavailable); Requires human approval: No", out)
 
+        code, out, err, _ = self.run_cli([
+            [project_page(item(30))],
+            *assignment(30, fields=fields_for(approval=None) + [approval_with_false_multi_options()]),
+        ])
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("Workstream: Architecture; Requires human approval: (unavailable)", out)
+
     def test_empty_ready_is_success_only_after_a_complete_board_read(self):
         code, out, err, calls = self.run_cli([[project_page(item(3, status=None))]])
         self.assertEqual((code, err, len(calls)), (0, "", 1))
@@ -217,7 +224,12 @@ def invalid_workstreams():
         for options in (None, [], {"name": "Architecture"}, ["Architecture"],
                         [{"name": "Architecture"}, {}], [{"name": " "}], [{"name": 42}],
                         valid["multi_select_options"] * 2)
-    ] + [[valid, single_field("Workstream", "Simulation")]]
+    ] + [[{**valid, "single_select_option": {}}],
+         [valid, single_field("Workstream", "Simulation")]]
+
+
+def approval_with_false_multi_options():
+    return {**single_field("Requires human approval", "No"), "multi_select_options": False}
 
 
 def assignment(number, *, blockers=(), fields=None, **changes):
@@ -381,6 +393,18 @@ class SelectionTests(unittest.TestCase):
                       "declaration disagrees with native Blocked by", out)
         self.assertIn("No eligible work.", out)
 
+    def test_empty_unused_option_members_preserve_selection(self):
+        for unused_multi_options in (None, []):
+            with self.subTest(unused_multi_options=unused_multi_options):
+                priority, workstream, approval = fields_for()
+                workstream["single_select_option"] = None
+                approval["multi_select_options"] = unused_multi_options
+                code, out, err, _ = self.select(
+                    [assignment(30, fields=[priority, workstream, approval])], pr_page(), issue_prs(),
+                )
+                self.assertEqual((code, err), (0, ""))
+                self.assertIn('Next issue: #30 "Work 30"', out)
+
     def test_invalid_native_options_fail_closed(self):
         invalid_approvals = (
             [single_field("Requires human approval", "")],
@@ -389,6 +413,7 @@ class SelectionTests(unittest.TestCase):
             [{"data_type": "single_select", "issue_field_name": "Requires human approval",
               "single_select_option": "No"}],
             [{**workstream_field(["No"]), "issue_field_name": "Requires human approval"}],
+            [approval_with_false_multi_options()],
             [single_field("Requires human approval", "No"), single_field("Requires human approval", "Yes")],
         )
         for name, fields in (
@@ -397,10 +422,11 @@ class SelectionTests(unittest.TestCase):
         ):
             for values in fields:
                 with self.subTest(name=name, values=values):
-                    code, out, err, calls = self.select([assignment(30, fields=values)])
-                    self.assertEqual((code, err, len(calls)), (0, "", 4))
+                    code, out, err, calls = self.select([assignment(30, fields=values)], pr_page(), issue_prs())
+                    self.assertEqual((code, err), (0, ""))
                     self.assertIn(f'SKIP #30 "Work 30": missing or ambiguous native {name}', out)
                     self.assertIn("No eligible work.", out)
+                    self.assertEqual(len(calls), 4)
 
     def test_implementation_declaration_must_be_first_nonempty_unindented_line(self):
         marker = "Selection-ready implementation; prerequisites: none"
