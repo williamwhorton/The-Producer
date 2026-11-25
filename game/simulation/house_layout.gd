@@ -1,6 +1,7 @@
 extends RefCounted
 ## The authored prototype floor plan. Cells are (column, floor, row), not world positions.
 
+const ID := "preview_house"
 const GROUND := 0
 const ROOMS := {
 	&"parlor": Rect2i(-4, -2, 4, 5),

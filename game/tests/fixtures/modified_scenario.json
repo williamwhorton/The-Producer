@@ -1,0 +1,12 @@
+{
+  "id": "modified_test_only",
+  "house_id": "preview_house",
+  "cast": [
+    {"id": "test_c", "room_id": "study", "start_cell": [2, 0, 1]}
+  ],
+  "surveillance": {"camera_rooms": ["study", "parlor"]},
+  "parameters": {
+    "required_exit_id": "front",
+    "navigation_example_start": [2, 0, 1]
+  }
+}
