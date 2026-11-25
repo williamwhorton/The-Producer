@@ -195,15 +195,18 @@ def main(argv=None):
             raise runner.Blocked(f"Origin is not {board.REPOSITORY}.")
         if not args.dry_run:
             require_main(repo)
-        if not args.continuous:
+        if args.dry_run:
             issue = snapshot()
-            if args.dry_run or issue is None:
-                if issue is not None:
-                    print(f"DRY RUN: would claim #{issue} for model {model}. No writes or agent sessions.")
-                return 0
+            if issue is not None:
+                print(f"DRY RUN: would claim #{issue} for model {model}. No writes or agent sessions.")
+            return 0
 
         run_home = repo.parent / f".{repo.name}-agent-runs"
         with pilot_lock(run_home):
+            if not args.continuous:
+                issue = snapshot()
+                if issue is None:
+                    return 0
             if not selector.owner_login(board.gh_json("GitHub pilot identity", "--method", "GET", "user")):
                 raise runner.Blocked(f"Status commands require gh authentication as {board.OWNER}.")
             project = Project(project_number)
@@ -228,8 +231,9 @@ def main(argv=None):
     except (AttributeError, KeyError, TypeError):
         print("run_ready: unexpected GitHub API or local state shape; inspect before proceeding", file=sys.stderr)
         return 1
-    except KeyboardInterrupt:
-        print("run_ready: interrupted; inspect the Project card and retained artifacts before proceeding",
+    except KeyboardInterrupt as error:
+        detail = f" ({error})" if str(error) else ""
+        print(f"run_ready: interrupted{detail}; inspect the Project card and retained artifacts before proceeding",
               file=sys.stderr)
         return 130
 

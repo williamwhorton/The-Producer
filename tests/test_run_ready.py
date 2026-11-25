@@ -62,13 +62,14 @@ class PilotTests(unittest.TestCase):
                     return pilot.cli()
             return pilot.main(argv)
 
-    def test_no_work_does_not_start_runner_or_create_lock(self):
+    def test_no_live_work_takes_lock_without_claim_or_dispatch(self):
         self.selection.side_effect = [Selection([], ["No eligible work."])]
         self.assertEqual(self.run_cli(), 0)
         self.assertIn("No eligible work.", self.stdout.getvalue())
         self.execute.assert_not_called()
         self.identity.assert_not_called()
-        self.assertFalse(self.run_home.exists())
+        self.project.post.assert_not_called()
+        self.assertTrue((self.run_home / "ready-pilot.lock").is_file())
 
     def test_dry_run_has_no_writes_or_sessions(self):
         self.branch = "agent/issue-14"
@@ -299,7 +300,7 @@ class PilotTests(unittest.TestCase):
         self.execute.assert_called_once()
         self.project.post.assert_called_once_with(14, "In Progress")
 
-    def test_continuous_stops_on_cleanup_api_error_after_verified_handoff(self):
+    def run_cleanup_failure_after_verified_handoff(self, error, expected_exit):
         self.repo.mkdir()
         self.board_read.side_effect = [self.board_read.return_value,
                                        ("Board", "board-url", {"Ready": [15]})]
@@ -315,7 +316,7 @@ class PilotTests(unittest.TestCase):
 
         def command(argv, cwd, **kwargs):
             if argv[:3] == ["gh", "pr", "list"]:
-                raise pilot.runner.Blocked("gh failed: API unavailable during cleanup")
+                raise error
             self.assertEqual(argv[0], "git")
             return "" if "status" in argv else sha
 
@@ -337,15 +338,25 @@ class PilotTests(unittest.TestCase):
                 return orchestrate(args, **callbacks)
 
         self.execute.side_effect = execute
-        self.assertEqual(self.run_cli("--continuous"), 1)
+        self.assertEqual(self.run_cli("--continuous"), expected_exit)
         self.execute.assert_called_once()
         self.assertEqual(agent.call_count, 2)
         self.board_read.assert_called_once_with(7)
         self.project.post.assert_called_once_with(14, "In Progress")
         state = json.loads(state_path.read_text())
         self.assertEqual((state["phase"], state["head_sha"]), ("ready_for_human_acceptance", sha))
+        self.assertEqual(state["pr"], pr["url"])
+        self.assertEqual(state["last_verdict"], "APPROVE")
+        return state
+
+    def test_continuous_stops_on_cleanup_api_error_after_verified_handoff(self):
+        state = self.run_cleanup_failure_after_verified_handoff(
+            pilot.runner.Blocked("gh failed: API unavailable during cleanup"), 1)
         self.assertIn("API unavailable during cleanup", state["cleanup_pending"][0])
         self.assertIn("API unavailable during cleanup", self.stderr.getvalue())
+
+    def test_continuous_preserves_verified_handoff_if_cleanup_is_interrupted(self):
+        self.run_cleanup_failure_after_verified_handoff(KeyboardInterrupt(), 130)
 
     def test_continuous_rechecks_new_unfinished_local_state_after_handoff(self):
         def execute(*args, **kwargs):
@@ -373,30 +384,76 @@ class PilotTests(unittest.TestCase):
         self.execute.assert_not_called()
         self.project.post.assert_not_called()
 
+    def test_idle_continuous_lock_refuses_default_live_empty_queue_but_not_preview(self):
+        self.board_read.return_value = ("Board", "board-url", {"Ready": []})
+        self.selection.side_effect = [Selection([], ["No eligible work."])] * 3
+
+        def idle(_):
+            self.assertEqual(self.run_cli(), 1)
+            self.assertIn("holds the local lock", self.stderr.getvalue())
+            self.assertEqual(self.run_cli("--dry-run"), 0)
+            self.assertEqual(self.board_read.call_args_list, [call(7), call(7)])
+            raise KeyboardInterrupt
+
+        with patch.object(pilot.time, "sleep", side_effect=idle):
+            self.assertEqual(self.run_cli("--continuous"), 130)
+        self.identity.assert_called_once()
+        self.execute.assert_not_called()
+        self.project.status.assert_not_called()
+        self.project.post.assert_not_called()
+
     def test_sigterm_during_agent_preparation_prevents_spawn(self):
         self.repo.mkdir()
-        log = self.repo / "stand-in-agent.log"
-        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Blocked"]
+        state_dir = self.run_home / "issue-14"
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress"]
+        orchestrate = pilot.runner.orchestrate
 
-        def prepare(cwd):
+        def prepare(_cwd):
             signal.raise_signal(signal.SIGTERM)
-            return {"PWD": str(cwd)}
 
-        def execute(args, *, claim, verify_status):
-            claim(args.issue)
-            pilot.runner.run_agent([sys.executable, "-c", "pass"], self.repo, log, 5)
-            self.fail("interrupted agent returned normally")
+        def command(argv, _cwd, **_kwargs):
+            if argv[:3] == ["git", "worktree", "add"]:
+                Path(argv[5]).mkdir()
+
+        def execute(args, **callbacks):
+            with (patch.object(pilot.runner, "preflight", return_value={"title": "Prototype"}),
+                  patch.object(pilot.runner, "run_cmd", side_effect=command),
+                  patch.object(pilot.runner, "verify_checkout")):
+                return orchestrate(args, **callbacks)
 
         self.execute.side_effect = execute
         with (patch.object(pilot.runner, "agent_environment", side_effect=prepare) as prep,
-              patch.object(pilot.runner.subprocess, "Popen", side_effect=OSError("unexpected spawn")) as spawn):
+              patch.object(pilot.runner.subprocess, "Popen", side_effect=AssertionError("unexpected spawn")) as spawn,
+              patch.object(pilot.runner, "cleanup_worktrees") as cleanup):
             code = self.run_cli("--continuous", with_signals=True)
-        prep.assert_called_once_with(self.repo)
+        cleanup.assert_not_called()
         spawn.assert_not_called()
         self.assertEqual(code, 130)
-        self.assertTrue(log.exists())
+        self.execute.assert_called_once()
         self.board_read.assert_called_once_with(7)
+        self.assertEqual(self.project.status.call_count, 3)
         self.project.post.assert_called_once_with(14, "In Progress")
+        state = json.loads((state_dir / "state.json").read_text())
+        self.assertEqual(state["phase"], "blocked")
+        self.assertIn("Inspect the Project card", state["reason"])
+        self.assertNotIn("pr", state)
+        dev = Path(state["development_worktree"])
+        prep.assert_called_once_with(dev)
+        self.assertTrue(dev.is_dir())
+        self.assertTrue((state_dir / "developer-0.log").is_file())
+
+        # Archive still refuses a surviving checkout, even after an empty PR lookup.
+        with (patch.object(pilot.runner, "json_cmd", return_value=[]) as lookup,
+              patch.object(pilot.runner, "registered_worktrees", return_value=[]),
+              patch.object(pilot.runner, "cleanup_worktrees", return_value=(0, []))):
+            with self.assertRaisesRegex(pilot.runner.Blocked, "Previous run worktree still exists"):
+                pilot.runner.archive_blocked_run(self.repo, 14, state_dir)
+            dev.rmdir()  # Stand-in checkout, after the owner has verified it is safe.
+            archive = pilot.runner.archive_blocked_run(self.repo, 14, state_dir)
+        self.assertIn(state["branch"], lookup.call_args.args[0])
+        self.assertFalse(state_dir.exists())
+        self.assertEqual(json.loads((archive / "state.json").read_text()), state)
+        self.assertTrue((archive / "developer-0.log").is_file())
 
     def test_sigterm_during_agent_start_stops_the_child_and_session(self):
         self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Blocked"]
@@ -421,13 +478,13 @@ class PilotTests(unittest.TestCase):
 
         self.execute.side_effect = execute
         with patch.object(pilot.runner.subprocess, "Popen", side_effect=start_and_interrupt):
-            self.assertEqual(self.run_cli("--continuous", with_signals=True), 1)
+            self.assertEqual(self.run_cli("--continuous", with_signals=True), 130)
         self.assertEqual(len(children), 1)
         self.assertIsNotNone(children[0].poll())
         self.assertTrue(log.exists())
-        self.assertIn("Agent stopped (timeout or interruption)", self.stderr.getvalue())
+        self.assertIn("Agent stopped", self.stderr.getvalue())
         self.board_read.assert_called_once_with(7)
-        self.project.post.assert_has_calls([call(14, "In Progress"), call(14, "Blocked")])
+        self.project.post.assert_called_once_with(14, "In Progress")
 
     def test_continuous_rechecks_branch_after_idle(self):
         self.selection.side_effect = [Selection([], ["No eligible work."])]

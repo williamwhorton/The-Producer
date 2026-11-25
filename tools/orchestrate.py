@@ -267,7 +267,9 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
             except ProcessLookupError:
                 pass
             process.wait()
-            raise Blocked("Agent stopped (timeout or interruption); check logs. "
+            if isinstance(exc, KeyboardInterrupt):
+                raise KeyboardInterrupt("Agent stopped; check its transcript") from exc
+            raise Blocked("Agent stopped (timeout); check logs. "
                           "The worktree is preserved for inspection.") from exc
         finally:
             if pump is not None:
@@ -730,16 +732,17 @@ def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> 
     board_instruction = (" The host pilot owns Project status for this assignment. "
                          "Do not post /status comments or edit the Project card."
                          if board_managed else "")
+    state_file = state_dir / "state.json"
+    assignment = dict(issue=issue, title=info["title"], model=model, branch=branch,
+                      development_worktree=str(dev), created_at=stamp, approved_by_human=True)
+    completed = False
+    interrupted = False
     if board_managed:
         claim(issue)
     state_dir.mkdir(parents=True, exist_ok=False)
-    state_file = state_dir / "state.json"
-    write_state(state_file, phase="starting", issue=issue, title=info["title"],
-                model=model, branch=branch, development_worktree=str(dev),
-                created_at=stamp, approved_by_human=True)
-    print(f"Run log/state: {state_dir}")
-    completed = False
     try:
+        write_state(state_file, phase="starting", **assignment)
+        print(f"Run log/state: {state_dir}")
         run_cmd(["git", "worktree", "add", "-b", branch, str(dev),
                  f"origin/{BASE_BRANCH}"], repo, timeout=120)
         write_state(state_file, phase="developing")
@@ -817,8 +820,16 @@ def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> 
     except Blocked as exc:
         write_state(state_file, phase="blocked", reason=str(exc))
         raise
+    except KeyboardInterrupt as exc:
+        interrupted = True
+        if not completed:
+            detail = str(exc) or "Assignment interrupted."
+            write_state(state_file, phase="blocked",
+                        reason=f"{detail} Inspect the Project card and retained artifacts before any retry.",
+                        **assignment)
+        raise
     finally:
-        if not board_managed or completed:
+        if not interrupted and (not board_managed or completed):
             try:
                 _, retained = (cleanup_worktrees(repo, issue=issue, fail_on_error=True) if board_managed
                                else cleanup_worktrees(repo))
