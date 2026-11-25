@@ -1,6 +1,6 @@
 # GitHub Project Status automation
 
-**Issue:** [#11](https://github.com/williamwhorton/The-Producer/issues/11)
+**Issues:** [#11](https://github.com/williamwhorton/The-Producer/issues/11), [#107](https://github.com/williamwhorton/The-Producer/issues/107)
 **Workflow:** `.github/workflows/project-status-sync.yml`
 **Script:** `tools/sync_project_status.py`
 
@@ -147,6 +147,8 @@ Only owner-authored standalone status comments trigger these changes. If an agen
 
 The workflow does **not** infer approval or readiness from priority, assignment, or a PR being created. A merged PR without a closing reference does **not** automatically close the issue.
 
+All events and manual reconciliations share one workflow-level writer, `project-status-sync`. GitHub's [queued concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) (`queue: max`) retains up to 100 pending runs instead of replacing the one pending run on each new arrival. For example, [run 255](https://github.com/williamwhorton/The-Producer/actions/runs/45524717103) was cancelled under the previous configuration because another request was waiting for that group. Once the new queue is full, additional runs can still be cancelled. GitHub queues by when a run starts waiting, not by source event time; do not rely on delivery order, especially for multiple events on the same issue.
+
 ## Agent-triggered transitions
 
 For transitions not observable from GitHub events, the repository **owner** posts an issue comment containing **only** one of the following commands:
@@ -169,24 +171,30 @@ gh issue comment 4 --repo williamwhorton/The-Producer --body "/status In Progres
 - **Developer/Architect:** `In Progress` when actually starting; `Blocked` when waiting on a concrete prerequisite.
 - **Reviewer:** `In Review` when reviewing without a PR; a ready PR with a closing reference already does this automatically.
 - **Done** is tied to **issue closure** after acceptance; attempting `/status Done` on an open issue fails instead of making misleading board state.
-- Agents must confirm that posting succeeded. If GitHub CLI authentication or comment permissions are missing, report the missing transition so the Lead or ChatGPT's authorized GitHub connection can issue it. Never silently claim the board was updated.
+- A posted comment is not proof of a status change. Confirm the event's run succeeded and the intended card shows the expected status. If GitHub CLI authentication or comment permissions are missing, report the missing transition to the Lead; do not claim the board was updated.
 
 For security, status comments are accepted only when posted by the repository's owner, and PR-triggered transitions require the PR to originate from the same repository. Do not add arbitrary status commands to untrusted PR descriptions.
 
 ## Reconciliation and failure recovery
 
-- Run **Actions → Sync GitHub Project Status → Run workflow** with an **empty** bootstrap input whenever board items may be missing or closed issues were not moved to Done.
-- Routine reconciliation adds missing issue cards, sets all closed issues Done, and keeps existing **non-Done** statuses on open issues so it won't erase manually or agent-set work stages. It resets erroneously Done open issues to Backlog.
-- One-time manual overrides are supported with `ISSUE=STATUS` pairs separated by commas. Use only when correcting an existing status (e.g. `4=In Progress,5=Blocked`).
-- If an event run fails, review its Actions logs for missing secret/variable, token permissions, missing Project option, or API error. Fix the cause and run reconciliation.
-- The automation does **not** synchronize arbitrary manual board card moves back to issue comments or manage Project fields other than Status. The board remains the source of truth for status values.
+Each write is read back from the same card before the run logs `#N: previous -> new (verified)`. `#N: already <status>` means the existing card was read and matched without a write. A failed read-back fails the run, but the write may already have landed. Neither result guarantees the card cannot change later. The read, write and verification are not atomic with owner moves or issue/PR changes. The single-assignment pilot still requires its own actual-card checks before Build and at handoff; a queued claim that cannot be verified in time stops the pilot.
+
+For a failed, cancelled, stale, or conflicting event, reconcile only the affected issue first:
+
+1. Pause new transitions for that issue and stop dispatch. In [Actions](https://github.com/williamwhorton/The-Producer/actions/workflows/project-status-sync.yml), identify the run from its triggering issue, comment, or PR and inspect its conclusion, annotations and **Update Project Status** log. Wait for already queued/running status runs to finish before correcting the card. If they do not finish within your verification window, stop and escalate rather than issuing another command.
+2. Read the issue's current state, any active linked PR, and the actual card (for example, `gh issue view "$ISSUE" --repo williamwhorton/The-Producer --json state,projectItems`). The owner confirms the intended status **now**; do not infer it by sorting old events or re-run a historical job. If the card already matches, stop with no write. Resolve any API/configuration failure before attempting a correction; do not change credentials as a test.
+3. For an open issue with a confirmed mismatch, the owner posts **one fresh** `/status <confirmed status>` issue comment. For a closed issue that is not Done, use the existing manual reconciliation on `main` with a **blank** `bootstrap_statuses` input if its repository-wide effects are appropriate; otherwise have the owner correct just the affected closed card in the Project UI. Never reopen or close issues as a recovery mechanism.
+4. Check the new run, if one was requested, and re-read the affected card. If the attempt fails, times out, still disagrees, or the owner's intent changes, stop and report the run URL, issue and observed status to the Creative Director. Do not send repeated commands or re-dispatch on uncertainty.
+
+Blank-input reconciliation adds missing issue cards, sets closed issues to Done, and preserves existing **non-Done** open statuses. It resets erroneously Done open issues to Backlog. The original `ISSUE=STATUS` bootstrap override is for deliberate one-time corrections only, not event recovery or retry. The automation does not mirror manual card moves into comments or manage other Project fields.
 
 ## Verification
 
 Local, network-free tests:
 
 ```bash
-python -m unittest discover -s tests -p 'test_project_status_sync.py' -v
+python3 -m unittest discover -s tests -p 'test_project_status_sync.py' -v
+python3 -m unittest discover -s tests
 ```
 
-End-to-end verification requires a successful Actions run with `PROJECTS_TOKEN` and `PROJECT_NUMBER`. Passing unit tests alone cannot prove remote GraphQL permissions or board behavior.
+End-to-end verification is a separate, post-merge check on `main`: observe a burst on distinct, owner-authorized cards in Actions and verify each card in the live Project. Use only approved test cards or safe idempotent transitions. Verify the single-assignment claim, review and accepted closure with a separately authorized pilot. Passing unit tests alone cannot prove remote GraphQL permissions, queueing or board behavior. Do not enable continuous dispatch without independent exact-head review, human merge and live verification.
