@@ -1,4 +1,6 @@
+import argparse
 import io
+import json
 import os
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -29,7 +31,7 @@ class PilotTests(unittest.TestCase):
         claim(args.issue)
         verify_status(args.issue, "In Progress")
         print("one fake Build + independent Reviewer")
-        verify_status(args.issue, "In Review")
+        verify_status(args.issue, "In Review", pending="In Progress")
         return 0
 
     def run_cli(self, *args, number="7"):
@@ -114,6 +116,64 @@ class PilotTests(unittest.TestCase):
         with patch.object(pilot.time, "monotonic", side_effect=[0, 0, 0, 0, 121]):
             self.assertEqual(self.run_cli(), 1)
         self.assertIn("stayed In Progress; expected In Review", self.stderr.getvalue())
+        self.project.post.assert_called_once_with(14, "In Progress")
+
+    def run_real_runner_offline(self, pr, verdict, *, board_error=None):
+        self.repo.mkdir()
+        args = argparse.Namespace(issue=14, repo=str(self.repo), model="openai/test",
+                                  dry_run=False, approve_issue=True, retry_blocked=False,
+                                  timeout_minutes=2)
+        with (patch.object(pilot.runner, "preflight", return_value={"title": "Prototype"}),
+              patch.object(pilot.runner, "run_cmd", return_value="a" * 40),
+              patch.object(pilot.runner, "verify_checkout"),
+              patch.object(pilot.runner, "pr_details", side_effect=pr),
+              patch.object(pilot.runner, "run_agent",
+                           side_effect=["Implemented", f"REVIEW_VERDICT: {verdict}"]) as agent,
+              patch.object(pilot.runner, "cleanup_worktrees") as cleanup,
+              patch.object(pilot.time, "sleep"),
+              redirect_stdout(self.stdout), redirect_stderr(self.stderr)):
+            def run():
+                return pilot.run_one(args, self.project, lambda n: Selection([n], []),
+                                     pilot.runner.orchestrate)
+
+            if board_error:
+                with self.assertRaisesRegex(pilot.BoardError, board_error):
+                    run()
+            else:
+                self.assertEqual(run(), 1)
+            self.assertEqual([entry.args[2].name for entry in agent.call_args_list],
+                             ["developer-0.log", "review-0.log"])
+            cleanup.assert_not_called()
+        return json.loads((self.run_home / "issue-14/state.json").read_text())
+
+    def test_handoff_rechecks_pr_head_after_the_board_wait(self):
+        pr = {"number": 90, "url": "https://github.com/williamwhorton/The-Producer/pull/90",
+              "headRefOid": "a" * 40}
+        statuses = iter(["Ready", "In Progress", "In Progress", "In Progress",
+                         "In Review", "In Review"])
+
+        def status(issue):
+            current = next(statuses)
+            if current == "In Review":
+                pr["headRefOid"] = "b" * 40
+            return current
+
+        self.project.status.side_effect = status
+        state = self.run_real_runner_offline(lambda *_: dict(pr), "APPROVE")
+        self.assertEqual((state["phase"], state["head_sha"]), ("blocked", "a" * 40))
+        self.assertIn("verdict is stale", state["reason"])
+        self.assertNotIn("READY FOR YOUR ACCEPTANCE", self.stdout.getvalue())
+        self.project.post.assert_called_once_with(14, "In Progress")
+
+    def test_withdrawn_card_stops_correction_without_another_status_write(self):
+        pr = {"number": 90, "url": "https://github.com/williamwhorton/The-Producer/pull/90",
+              "headRefOid": "a" * 40}
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Backlog"]
+
+        state = self.run_real_runner_offline(lambda *_: dict(pr), "REQUEST_CHANGES",
+                                             board_error="Backlog, not In Review")
+        self.assertEqual(state["phase"], "blocked")
+        self.assertIn("Backlog, not In Review", state["reason"])
         self.project.post.assert_called_once_with(14, "In Progress")
 
     def test_failed_runner_marks_blocked_only_while_still_in_progress(self):

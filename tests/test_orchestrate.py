@@ -303,7 +303,7 @@ class FlowTests(unittest.TestCase):
 
     def test_pilot_keeps_review_artifacts_if_board_handoff_fails(self):
         sha = 'a' * 40
-        def check(number, status):
+        def check(number, status, *, pending=None):
             if status == 'In Review':
                 raise mod.Blocked('In Review not verified')
 

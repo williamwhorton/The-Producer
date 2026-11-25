@@ -732,7 +732,11 @@ def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> 
             if verdict == "APPROVE":
                 if verify_status is not None:
                     print(f"Technical review: {verdict}; {pr['url']} at {pr['headRefOid']}; logs: {state_dir}")
-                    verify_status(issue, "In Review")
+                    verify_status(issue, "In Review", pending="In Progress")
+                    # The PR can change while the status workflow catches up.
+                    latest = pr_details(branch, issue, repo)
+                    if (latest["number"], latest["headRefOid"]) != (pr["number"], pr["headRefOid"]):
+                        raise Blocked("PR number or head changed during Project handoff; verdict is stale.")
                 write_state(state_file, phase="ready_for_human_acceptance")
                 completed = True
                 print(f"READY FOR YOUR ACCEPTANCE: {pr['url']}")
@@ -748,8 +752,11 @@ def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> 
                 raise Blocked("Independent review still requests changes after one correction cycle.")
             write_state(state_file, phase="correcting")
             verify_checkout(dev, expected_branch=branch)
+            prompt = correction_prompt(issue, pr, review_text) + board_instruction
+            if verify_status is not None:
+                verify_status(issue, "In Review")
             run_agent(["opencode", "run", "--standalone", "--agent", "build", "--model",
-                       model, correction_prompt(issue, pr, review_text) + board_instruction], dev,
+                       model, prompt], dev,
                       state_dir / "developer-1.log", args.timeout_minutes * 60)
             verify_checkout(dev, expected_branch=branch)
             updated = pr_details(branch, issue, repo)

@@ -117,11 +117,10 @@ def run_one(args, project, recheck, execute):
         require_status(project, number, "In Progress", pending="Ready")
         claimed = True
 
-    def verify_status(number, expected):
+    def verify_status(number, expected, *, pending=None):
         # The PR-open event owns In Review. Never replay a status command if
         # that event is lost; leave the artifacts for the owner to reconcile.
-        require_status(project, number, expected,
-                       pending="In Progress" if expected == "In Review" else None)
+        require_status(project, number, expected, pending=pending)
 
     try:
         result = execute(args, claim=claim, verify_status=verify_status)
