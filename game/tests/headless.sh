@@ -28,3 +28,4 @@ check --script res://tests/smoke.gd
 check --script res://tests/smoke.gd -- --show-navigation
 check --script res://tests/scheduler.gd
 check --script res://tests/house_navigation.gd
+check --script res://tests/scenario_loading.gd

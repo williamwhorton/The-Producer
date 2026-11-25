@@ -45,15 +45,33 @@ and HUD selection work as usual. The ordinary launch shows both openings
 without the line. This is a fixed route example, not an actor's intent or a
 player movement control. See the [authored layout](simulation/README.md#house-layout-and-routing-29).
 
+### Authored scenario (#30)
+
+The preview loads [`scenarios/house_preview.json`](scenarios/house_preview.json)
+on startup. It references the existing `preview_house` topology by ID and
+defines placeholder cast IDs and starting cells, camera coverage for both rooms,
+and the exit and origin of the static route example. Cells are
+`[column, floor, row]`; only floor `0` exists. A start must be inside the named
+room, clear of furniture, and able to reach the named exit's interior threshold.
+Every room must appear once in `surveillance.camera_rooms`. A failed load
+reports the file and the offending field (or JSON line) and exits nonzero.
+
+These are authored scenario inputs, not a save format. No actors, live
+surveillance, or inheritance are instantiated by the preview. The
+[modified test fixture](tests/fixtures/modified_scenario.json) uses the same
+house with a different cast and a route example that starts in the study; it
+is not used at startup or offered as another playable property.
+
 ## Boundaries
 
 | Path | Responsibility in this slice |
 | --- | --- |
-| `main.tscn`, `main.gd` | Compose the world view and HUD, pass the projected floor plan to the renderer and translate room selection to a HUD label. |
+| `main.tscn`, `main.gd` | Load the authored scenario, compose the world view and HUD, pass the projected floor plan to the renderer and translate room selection to a HUD label. |
 | `observation/` | Project the producer-known floor plan, room labels and optional static route example, with no private state. Future live evidence must follow [ADR-0004](../docs/decisions/ADR-0004-producer-observation-boundary.md). |
 | `world/` | Preview geometry, camera, lighting, cutaway, picking and floor highlight. The adapter emits a room ID, not a collider or 3D position. |
 | `ui/` | Title, room label and controls hint; no world or domain script dependency. |
-| `simulation/` | [Private seeded scheduler and clock, authored house topology and routing](simulation/README.md). The static preview does not run a contest simulation. |
+| `scenarios/` | Local authored scenario input; no gameplay scene or saved state. |
+| `simulation/` | Scenario validation and [private seeded scheduler and clock, authored house topology and routing](simulation/README.md). The static preview does not run a contest simulation. |
 | `persistence/` | Reserved for save/load and campaign state. No save API, format or storage is chosen or used. |
 
 The preview uses local Godot scenes/scripts only: a headless boot path (T-01
@@ -82,6 +100,7 @@ godot --headless --path game --script res://tests/smoke.gd
 godot --headless --path game --script res://tests/smoke.gd -- --show-navigation
 godot --headless --path game --script res://tests/scheduler.gd
 godot --headless --path game --script res://tests/house_navigation.gd
+godot --headless --path game --script res://tests/scenario_loading.gd
 ```
 
 The first two commands should exit successfully without script/scene errors.
@@ -93,6 +112,9 @@ The scheduler test runs separately from the scene; expect exit 0 and
 `PASS: seeded scheduler ordering, tactical pause, live triggers, and speed invariance`.
 The scene-free navigation test expects exit 0 and
 `PASS: house cells, doorway constraints, shortest routes, and exit threshold`.
+The scenario test loads both JSON files, checks that the modified parameters
+change the static route, and rejects invalid references and locations. Expect
+exit 0 and `PASS: authored and modified scenarios, reference and location validation`.
 The disposable `spikes/` are not used as substitutes. Headless checks do not
 verify rendered output.
 To repeat the scene smoke test with graphics enabled and the route visible, run

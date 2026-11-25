@@ -13,11 +13,11 @@ static func room_name(room_id: StringName) -> String:
 	return ROOM_NAMES.get(room_id, "")
 
 
-static func floor_plan(show_navigation: bool) -> Dictionary:
-	# This is known architecture plus an optional fixed example, not an actor's plan.
+static func floor_plan(show_navigation: bool, start: Vector3i, exit_id: StringName) -> Dictionary:
+	# Known architecture and a static example, never cast data or an actor's plan.
 	var example: Array[Vector3i] = []
 	if show_navigation:
-		example = HouseLayout.route_to_exit(Vector3i(-3, HouseLayout.GROUND, 2), &"front")
+		example = HouseLayout.route_to_exit(start, exit_id)
 	return {
 		"rooms": HouseLayout.ROOMS.duplicate(),
 		"walls": HouseLayout.wall_edges(),
