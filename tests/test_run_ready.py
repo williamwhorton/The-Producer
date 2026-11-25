@@ -299,6 +299,54 @@ class PilotTests(unittest.TestCase):
         self.execute.assert_called_once()
         self.project.post.assert_called_once_with(14, "In Progress")
 
+    def test_continuous_stops_on_cleanup_api_error_after_verified_handoff(self):
+        self.repo.mkdir()
+        self.board_read.side_effect = [self.board_read.return_value,
+                                       ("Board", "board-url", {"Ready": [15]})]
+        self.selection.side_effect = [Selection([14, 15], []), Selection([14], []),
+                                      Selection([15], [])]
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "In Review", "In Review"]
+        state_path = self.run_home / "issue-14/state.json"
+        sha = "a" * 40
+        pr = {"number": 90, "url": "https://github.com/williamwhorton/The-Producer/pull/90",
+              "headRefOid": sha}
+        orchestrate = pilot.runner.orchestrate
+        agent = Mock(side_effect=["Implemented", "REVIEW_VERDICT: APPROVE"])
+
+        def command(argv, cwd, **kwargs):
+            if argv[:3] == ["gh", "pr", "list"]:
+                raise pilot.runner.Blocked("gh failed: API unavailable during cleanup")
+            self.assertEqual(argv[0], "git")
+            return "" if "status" in argv else sha
+
+        def execute(args, **callbacks):
+            if args.issue != 14:
+                self.fail(f"dispatched #{args.issue} after cleanup failure")
+
+            def trees(_):
+                state = json.loads(state_path.read_text())
+                return [{"path": Path(state["development_worktree"]), "branch": state["branch"]}]
+
+            with (patch.object(pilot.runner, "preflight", return_value={"title": "Prototype"}),
+                  patch.object(pilot.runner, "run_cmd", side_effect=command),
+                  patch.object(pilot.runner, "registered_worktrees", side_effect=trees),
+                  patch.object(pilot.runner, "worktree_in_use", return_value=False),
+                  patch.object(pilot.runner, "verify_checkout"),
+                  patch.object(pilot.runner, "pr_details", return_value=pr),
+                  patch.object(pilot.runner, "run_agent", agent)):
+                return orchestrate(args, **callbacks)
+
+        self.execute.side_effect = execute
+        self.assertEqual(self.run_cli("--continuous"), 1)
+        self.execute.assert_called_once()
+        self.assertEqual(agent.call_count, 2)
+        self.board_read.assert_called_once_with(7)
+        self.project.post.assert_called_once_with(14, "In Progress")
+        state = json.loads(state_path.read_text())
+        self.assertEqual((state["phase"], state["head_sha"]), ("ready_for_human_acceptance", sha))
+        self.assertIn("API unavailable during cleanup", state["cleanup_pending"][0])
+        self.assertIn("API unavailable during cleanup", self.stderr.getvalue())
+
     def test_continuous_rechecks_new_unfinished_local_state_after_handoff(self):
         def execute(*args, **kwargs):
             result = self.fake_runner(*args, **kwargs)
@@ -324,6 +372,31 @@ class PilotTests(unittest.TestCase):
         self.board_read.assert_called_once_with(7)
         self.execute.assert_not_called()
         self.project.post.assert_not_called()
+
+    def test_sigterm_during_agent_preparation_prevents_spawn(self):
+        self.repo.mkdir()
+        log = self.repo / "stand-in-agent.log"
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Blocked"]
+
+        def prepare(cwd):
+            signal.raise_signal(signal.SIGTERM)
+            return {"PWD": str(cwd)}
+
+        def execute(args, *, claim, verify_status):
+            claim(args.issue)
+            pilot.runner.run_agent([sys.executable, "-c", "pass"], self.repo, log, 5)
+            self.fail("interrupted agent returned normally")
+
+        self.execute.side_effect = execute
+        with (patch.object(pilot.runner, "agent_environment", side_effect=prepare) as prep,
+              patch.object(pilot.runner.subprocess, "Popen", side_effect=OSError("unexpected spawn")) as spawn):
+            code = self.run_cli("--continuous", with_signals=True)
+        prep.assert_called_once_with(self.repo)
+        spawn.assert_not_called()
+        self.assertEqual(code, 130)
+        self.assertTrue(log.exists())
+        self.board_read.assert_called_once_with(7)
+        self.project.post.assert_called_once_with(14, "In Progress")
 
     def test_sigterm_during_agent_start_stops_the_child_and_session(self):
         self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Blocked"]

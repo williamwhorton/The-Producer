@@ -468,7 +468,7 @@ class CleanupTests(unittest.TestCase):
         with patch.object(mod, "registered_worktrees", return_value=[self.record]), \
              patch.object(mod, "worktree_in_use", return_value=False), \
              patch.object(mod, "run_cmd", side_effect=cmd):
-            count, skipped = mod.cleanup_worktrees(self.repo)
+            count, skipped = mod.cleanup_worktrees(self.repo, fail_on_error=True)
         self.assertEqual(count, 0)
         self.assertIn("uncommitted", skipped[0])
 

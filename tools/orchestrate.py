@@ -181,7 +181,7 @@ def agent_environment(cwd: Path) -> dict[str, str]:
 def defer_launch_interrupt():
     """Don't unwind Popen before the new process group has a handle."""
     if threading.current_thread() is not threading.main_thread():
-        yield
+        yield lambda: None
         return
 
     pending = []
@@ -191,18 +191,22 @@ def defer_launch_interrupt():
             pending.append((signum, frame))
 
     handlers = {}
+
+    def check_pending():
+        if pending:
+            signum, frame = pending.pop()
+            handlers[signum](signum, frame)
+
     try:
         for sig in (signal.SIGINT, signal.SIGTERM):
             handler = signal.getsignal(sig)
             if callable(handler):
                 handlers[sig] = signal.signal(sig, defer)
-        yield
+        yield check_pending
     finally:
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
-        if pending:
-            signum, frame = pending[0]
-            handlers[signum](signum, frame)
+        check_pending()
 
 
 def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
@@ -233,9 +237,12 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
                 print(remainder, end="", flush=True)
         process = pump = None
         try:
-            with defer_launch_interrupt():
+            env = agent_environment(cwd)
+            with defer_launch_interrupt() as check_pending:
+                # A stop received while installing the handlers is still pre-launch.
+                check_pending()
                 try:
-                    process = subprocess.Popen(argv, cwd=cwd, env=agent_environment(cwd),
+                    process = subprocess.Popen(argv, cwd=cwd, env=env,
                                                stdin=None, stdout=subprocess.PIPE,
                                                stderr=subprocess.STDOUT, start_new_session=True)
                 except OSError as exc:
@@ -441,27 +448,33 @@ def merged_pr_contains_review_commit(repo: Path, issue: int, sha: str,
     return result.returncode == 0
 
 
+class RetainWorktree(Blocked):
+    """An ordinary cleanup safeguard, not an operational failure."""
+
+
 def godot_ignored_cache_dirs(worktree: Path, ignored: list[str]) -> list[Path]:
     """Recognize only disposable .godot caches, including nested Godot projects."""
     caches: set[Path] = set()
     for name in ignored:
         relative = Path(name)
         if relative.is_absolute() or ".." in relative.parts or ".godot" not in relative.parts:
-            raise Blocked("ignored files outside disposable .godot cache")
+            raise RetainWorktree("ignored files outside disposable .godot cache")
         cache_parts = relative.parts[:relative.parts.index(".godot") + 1]
         cache = worktree.joinpath(*cache_parts)
         if cache.is_symlink() or not cache.is_dir():
-            raise Blocked("Godot cache is not a normal directory; refusing to delete it")
+            raise RetainWorktree("Godot cache is not a normal directory; refusing to delete it")
         if not cache.resolve().is_relative_to(worktree.resolve()):
-            raise Blocked("Godot cache resolves outside the worktree")
+            raise RetainWorktree("Godot cache resolves outside the worktree")
         caches.add(cache)
     return sorted(caches)
 
 
-def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, list[str]]:
+def cleanup_worktrees(repo: Path, *, issue: int | None = None,
+                      fail_on_error: bool = False) -> tuple[int, list[str]]:
     """Remove only inactive, clean, owned worktrees with safely preserved commits.
 
     This deliberately never calls git worktree remove --force or deletes logs.
+    Board-managed handoffs stop on operational errors, not ordinary retention.
     """
     repo = repo.resolve()
     known: set[Path] = set()
@@ -505,10 +518,10 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
             continue
         try:
             if worktree_in_use(path):
-                raise Blocked("a running process is using this checkout")
+                raise RetainWorktree("a running process is using this checkout")
             if run_cmd(["git", "-C", str(path), "status", "--porcelain",
                         "--untracked-files=all"], repo):
-                raise Blocked("uncommitted or untracked files exist")
+                raise RetainWorktree("uncommitted or untracked files exist")
             ignored = run_cmd(["git", "-C", str(path), "status", "--porcelain",
                                "--ignored", "--untracked-files=all"], repo)
             extras = [line[3:] for line in ignored.splitlines() if line.startswith("!! ")]
@@ -521,7 +534,7 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
                     review_issue = int(match[1]) if match else None
                     if review_issue is None or not merged_pr_contains_review_commit(
                             repo, review_issue, head, review_prs.get(review_issue)):
-                        raise Blocked("detached review commit not verified in runner state or merged PR")
+                        raise RetainWorktree("detached review commit not verified in runner state or merged PR")
             elif branch and pr_preserves_head(repo, branch, head, is_legacy):
                 pass
             elif (branch and is_agent and not is_legacy and
@@ -531,7 +544,7 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
                 # Failed before the Developer created any unique commits.
                 pass
             else:
-                raise Blocked("local commit is not verified on an eligible GitHub PR")
+                raise RetainWorktree("local commit is not verified on an eligible GitHub PR")
             # Godot's generated .godot caches are safe to remove; Git refuses
             # worktree removal when ignored generated files remain in the checkout.
             # Never delete any other ignored content or follow cache symlinks.
@@ -543,6 +556,8 @@ def cleanup_worktrees(repo: Path, *, issue: int | None = None) -> tuple[int, lis
         except (Blocked, OSError) as exc:
             skipped.append(f"{path}: {exc}")
             print(f"RETAINED: {path} ({exc})", flush=True)
+            if fail_on_error and not isinstance(exc, RetainWorktree):
+                raise Blocked(skipped[-1]) from exc
     print(f"Worktree cleanup: {removed} removed, {len(skipped)} retained.", flush=True)
     return removed, skipped
 
@@ -805,7 +820,7 @@ def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> 
     finally:
         if not board_managed or completed:
             try:
-                _, retained = (cleanup_worktrees(repo, issue=issue) if board_managed
+                _, retained = (cleanup_worktrees(repo, issue=issue, fail_on_error=True) if board_managed
                                else cleanup_worktrees(repo))
                 write_state(state_file, cleanup_pending=retained)
             except (Blocked, OSError) as exc:
