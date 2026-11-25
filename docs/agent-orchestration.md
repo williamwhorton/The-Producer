@@ -17,7 +17,7 @@ After pulling the config, inspect the **effective** permissions locally using `o
 
 ## Automatic worktree cleanup and local Godot testing
 
-**Default behavior:** When a supervised runner invocation finishes (success, review rejection or blocked run), the runner automatically checks **all** known agent worktrees and safely removes eligible finished ones. It reports how many were removed and why any were retained. The primary checkout, PRs, local review logs/state and repository history are never deleted. A failed cleanup is reported, not ignored.
+**Default behavior:** When a manual supervised runner invocation finishes (success, review rejection or blocked run), the runner automatically checks **all** known agent worktrees and safely removes eligible finished ones. The Ready pilot instead retains its worktrees on failure and checks only its own worktrees for safe cleanup after verified handoff. The runner reports how many were removed and why any were retained. The primary checkout, PRs, local review logs/state and repository history are never deleted. A failed cleanup is reported, not ignored.
 
 **One-time cleanup of existing worktrees** from previous runs (including the previously merged #13 and #14 prototype worktrees) needs only one command **after this PR is merged**:
 
@@ -101,6 +101,27 @@ The line must match exactly: no indentation, quoting, or surrounding Markdown. L
 A prerequisite must be closed as **Completed**. For code work, the latest closure must directly identify a PR merged into this repo's `main` by `williamwhorton`. For known non-code work only, an owner-authored (and not last edited by someone else) issue may use the exact standalone declaration `Selection completion: non-code` under the same first-nonempty-line rule; its latest manual **Completed** closure must be by the owner. Wait on open, inaccessible, external, not-planned or otherwise unverified prerequisites; the Lead handles exceptions instead of replaying history.
 
 Drafts and other open implementation PRs found by GitHub closing link or `agent/issue-N` head, and retained local runner directories or registered issue worktrees, exclude the assignment. The selector checks native links from the PR and issue sides, including links to PRs targeting another repository. It does not interpret PR body text as a link. Archived retry logs are retained and are not active runs. The diagnostic does not search or repair abandoned history; the Lead must resolve any known ambiguity before declaring the assignment ready. Eligible issues are ranked first by how many unique, otherwise-valid Ready issues would have **no other** unsatisfied direct prerequisite after their acceptance, then by native Priority, then by ascending issue number. Successors still wait until acceptance. API/auth errors exit nonzero instead of reporting an empty queue.
+
+### Ready pilot: one explicitly launched assignment
+
+On the trusted Linux host, set `PROJECT_NUMBER` to the same configured number that Actions uses, and verify `gh` access and the exact ChatGPT-connected model with `opencode models`. From the **primary repository root**, run a read-only preview:
+
+```sh
+python3 tools/run_ready.py --model openai/gpt-6.2-sol --dry-run
+```
+
+Use the exact model ID available on your host. No eligible work exits successfully without creating a run or invoking agents. An API/auth/configuration failure is not an empty queue. After the pilot code is merged, the Lead should prepare one approved prototype using the native fields, reconciled blockers, and first-line declaration above. Proceed only when the preview recommends that issue. For one separately authorized invocation, use the number confirmed in the preview:
+
+```sh
+read -r -p "Approved prototype issue number: " PILOT_ISSUE
+python3 tools/run_ready.py --model openai/gpt-6.2-sol --expect-issue "$PILOT_ISSUE"
+```
+
+`--expect-issue` refuses a different recommendation; it never forces selection. The live command requires `gh` authentication as `williamwhorton`. Do not start a parallel manual runner, review-only run, or cleanup while this pilot is running. The primary checkout's local pilot lock excludes concurrent pilots; a scan also refuses known active or unfinished runs and in-use agent worktrees. The lock is not a remote or cross-host claim and does not coordinate with manual invocations.
+
+The host rechecks the selected issue's eligibility and actual Ready card before posting `/status In Progress`, then waits for the Project field to reflect it and verifies it again immediately before Build. Status reads have a bounded verification window, not a queue loop; GitHub comment/Actions updates are asynchronous and not atomic with the card read. The host stops on observed withdrawal, ambiguous status or API failure. Build does not post a duplicate status command. The non-draft PR event owns `In Review`; a missing transition stops the handoff instead of replaying status commands or treating a technically approved PR as ready for acceptance. Consult the status workflow's Actions logs and the current card if verification fails.
+
+Success reports the verified PR head, technical verdict, logs and verified `In Review`, with human acceptance and merge still pending. A runner failure retains any PR, local state, transcripts and worktrees. If the card is still `In Progress`, the host posts and verifies `/status Blocked`; otherwise it leaves the card alone (including `In Review` on a failed review) and reports the problem for owner triage. `In Review` by itself is not an approval. There is no retry, queue advance, merge or closure. Live end-to-end behavior must be verified on the trusted host; offline tests do not establish Actions delivery or OpenCode permissions.
 
 ### Explicit single-issue execution
 
