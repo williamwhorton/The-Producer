@@ -169,8 +169,8 @@ def assignment(number, *, blockers=(), fields=None, **changes):
     issue = {
         "number": number, "state": "open", "title": f"Work {number}", "type": {"name": "Task"},
         "labels": [{"name": "agent:developer"}], "assignees": [],
-        "body": f"## Acceptance criteria\n- Deliver a tested change.\n"
-                f"Selection-ready implementation; prerequisites: {declaration}",
+        "body": f"Selection-ready implementation; prerequisites: {declaration}\n\n"
+                "## Acceptance criteria\n- Deliver a tested change.",
         "issue_dependencies_summary": {
             "blocked_by": len({b["html_url"] for b in blockers if b.get("state") == "open"}),
             "total_blocked_by": len({b["html_url"] for b in blockers}),
@@ -283,7 +283,7 @@ class SelectionTests(unittest.TestCase):
             assignment(5, fields=fields_for(approval=None)),
             assignment(6, body="## Dependencies\nPrevious work must finish before this."),
             assignment(7, blockers=[blocker(1)],
-                       body="Deliver tests.\nSelection-ready implementation; prerequisites: none"),
+                        body="Selection-ready implementation; prerequisites: none\n\nDeliver tests."),
             assignment(8, type={"name": "Design Decision"}),
             assignment(9, labels=[]),
             assignment(10, state="closed"),
@@ -300,6 +300,26 @@ class SelectionTests(unittest.TestCase):
             self.assertRegex(out, rf"SKIP #{number} [^\n]+{reason}")
         self.assertIn("No eligible work.", out)
 
+    def test_implementation_declaration_must_be_first_nonempty_unindented_line(self):
+        marker = "Selection-ready implementation; prerequisites: none"
+        for misplaced in (f"```\n{marker}\n```", f"> {marker}", f"    {marker}",
+                          f"## Example\n{marker}", f"{marker} "):
+            with self.subTest(misplaced=misplaced):
+                code, out, err, _ = self.select([
+                    assignment(1, body=f"{misplaced}\n\n## Dependencies\nWait for #98 before starting."),
+                ], pr_page(), issue_prs())
+                self.assertEqual((code, err), (0, ""))
+                self.assertRegex(out, r"SKIP #1 .*prerequisite reconciliation")
+                self.assertIn("No eligible work.", out)
+
+        code, out, err, _ = self.select([
+            assignment(1, body=f"\n \n{marker}\n\nDeliver tests."),
+            assignment(2, body=f"{marker}\n \n"),
+        ], pr_page(), issue_prs())
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn('Next issue: #1 "Work 1"', out)
+        self.assertRegex(out, r"SKIP #2 .*approved implementation .*not confirmed")
+
     def test_closed_dependencies_need_direct_accepted_completion(self):
         rows = [
             assignment(1, blockers=[blocker(90, "closed", "completed")]),
@@ -311,7 +331,7 @@ class SelectionTests(unittest.TestCase):
         ]
         code, out, err, calls = self.select(
             rows, pr_page(), issue_prs(), closure(closing_pr()),
-            issue_prs(), closure(None, body="Selection completion: non-code"),
+            issue_prs(), closure(None, body="\n \nSelection completion: non-code\n\nDocumented outcome."),
             issue_prs(), issue_prs(), issue_prs(), issue_prs(),
             subprocess.CompletedProcess([], 1, json.dumps({
                 "data": {"repository": {"issue": None}},
@@ -342,6 +362,19 @@ class SelectionTests(unittest.TestCase):
                 )
                 self.assertEqual((code, err), (0, ""))
                 self.assertRegex(out, r"WAIT #3 .*no owner-accepted closing merge")
+                self.assertIn("No eligible work.", out)
+
+    def test_misplaced_non_code_completion_declaration_remains_waiting(self):
+        marker = "Selection completion: non-code"
+        for body in (f"```\n{marker}\n```", f"> {marker}", f"    {marker}",
+                     f"## Example\n{marker}", f"{marker} "):
+            with self.subTest(body=body):
+                code, out, err, _ = self.select(
+                    [assignment(1, blockers=[blocker(90, "closed", "completed")])],
+                    pr_page(), issue_prs(), closure(None, body=body),
+                )
+                self.assertEqual((code, err), (0, ""))
+                self.assertRegex(out, r"WAIT #1 .*no owner-accepted closing merge")
                 self.assertIn("No eligible work.", out)
 
     def test_pr_pagination_drafts_native_links_branches_and_local_duplicates(self):

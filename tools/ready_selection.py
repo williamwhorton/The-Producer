@@ -178,6 +178,10 @@ def native_option(fields, name):
     return value if isinstance(value, str) and value.strip() and value.strip() == value else None
 
 
+def nonempty_body_lines(body):
+    return [line for line in (body or "").splitlines() if line.strip()]
+
+
 def exclusion(issue, fields, blockers):
     if issue.get("state") != "open":
         return "issue is not open or state is unavailable"
@@ -202,12 +206,13 @@ def exclusion(issue, fields, blockers):
         return ("human approval is outstanding" if approval == "Yes"
                 else "missing or ambiguous native Human Approval Required")
 
-    body = (issue.get("body") or "").splitlines()
-    markers = [line for line in body if line.startswith("Selection-ready implementation;")]
-    if not markers or not any(line.strip() and line not in markers for line in body):
+    body = nonempty_body_lines(issue.get("body"))
+    prefix = "Selection-ready implementation;"
+    if (not body or not body[0].startswith(prefix)
+            or not any(not line.startswith(prefix) for line in body[1:])):
         return "approved implementation or legacy prerequisite reconciliation not confirmed; Lead triage"
     expected = "native" if blockers else "none"
-    if markers != [f"Selection-ready implementation; prerequisites: {expected}"]:
+    if body[0] != f"{prefix} prerequisites: {expected}":
         return "ambiguous prerequisite reconciliation or declaration disagrees with native Blocked by; Lead triage"
     total = (issue.get("issue_dependencies_summary") or {}).get("total_blocked_by")
     if type(total) is not int or total != len({b.get("html_url") or b.get("number") for b in blockers}):
@@ -241,7 +246,7 @@ def accepted_closure(read, number):
             return None
     elif (owner_login(event["actor"]) and owner_login(issue["author"])
           and (issue["editor"] is None or owner_login(issue["editor"]))
-          and "Selection completion: non-code" in issue["body"].splitlines()):
+          and nonempty_body_lines(issue["body"])[:1] == ["Selection completion: non-code"]):
         return None
     return "no owner-accepted closing merge to main or explicit owner-completed non-code work; Lead triage"
 
