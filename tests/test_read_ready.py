@@ -190,9 +190,9 @@ def pr(number, branch="feature", *, body=None, draft=False, links=()):
             }}
 
 
-def pr_page(*prs, more=False):
+def pr_page(*prs, more=False, cursor="pr-cursor"):
     return {"data": {"repository": {"pullRequests": {
-        "nodes": prs, "pageInfo": {"hasNextPage": more, "endCursor": "pr-cursor" if prs else None},
+        "nodes": prs, "pageInfo": {"hasNextPage": more, "endCursor": cursor if prs else None},
     }}}}
 
 
@@ -232,7 +232,7 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(draft=draft):
                 url = "https://github.com/other/repo/pull/21"
                 code, out, err, calls = self.select(
-                    [assignment(42)], [pr_page()], issue_prs({"isDraft": draft, "url": url}),
+                    [assignment(42)], pr_page(), issue_prs({"isDraft": draft, "url": url}),
                 )
                 self.assertEqual((code, err), (0, ""))
                 kind = "draft PR" if draft else "PR"
@@ -244,7 +244,7 @@ class SelectionTests(unittest.TestCase):
     def test_pr_body_examples_without_native_links_do_not_exclude_candidate(self):
         code, out, err, _ = self.select(
             [assignment(42)],
-            [pr_page(pr(21, body="Use `Closes #42` as an example.\n\n> Fixes #42\n\n```\nCloses #42\n```"))],
+            pr_page(pr(21, body="Use `Closes #42` as an example.\n\n> Fixes #42\n\n```\nCloses #42\n```")),
             issue_prs(),
         )
         self.assertEqual((code, err), (0, ""))
@@ -261,7 +261,7 @@ class SelectionTests(unittest.TestCase):
             assignment(15, blockers=[blocker(10)], assignees=[{"login": "director", "type": "User"}]),
             assignment(16, blockers=[blocker(13)]),
         ]
-        code, out, err, _ = self.select(rows, [pr_page()], *(issue_prs() for _ in range(6)),
+        code, out, err, _ = self.select(rows, pr_page(), *(issue_prs() for _ in range(6)),
                                         items=[*(item(n) for n in range(16, 9, -1)),
                                                item(13), item(3, "other/repo"),
                                                item(4, kind="PULL_REQUEST"), item(5, status="done")])
@@ -310,7 +310,7 @@ class SelectionTests(unittest.TestCase):
             assignment(6, blockers=[blocker(94, "closed", "completed")]),
         ]
         code, out, err, calls = self.select(
-            rows, [pr_page()], issue_prs(), closure(closing_pr()),
+            rows, pr_page(), issue_prs(), closure(closing_pr()),
             issue_prs(), closure(None, body="Selection completion: non-code"),
             issue_prs(), issue_prs(), issue_prs(), issue_prs(),
             subprocess.CompletedProcess([], 1, json.dumps({
@@ -338,7 +338,7 @@ class SelectionTests(unittest.TestCase):
         ):
             with self.subTest(payload=payload):
                 code, out, err, _ = self.select(
-                    [assignment(3, blockers=[blocker(98, "closed", "completed")])], [pr_page()], issue_prs(), payload,
+                    [assignment(3, blockers=[blocker(98, "closed", "completed")])], pr_page(), issue_prs(), payload,
                 )
                 self.assertEqual((code, err), (0, ""))
                 self.assertRegex(out, r"WAIT #3 .*no owner-accepted closing merge")
@@ -346,28 +346,50 @@ class SelectionTests(unittest.TestCase):
 
     def test_pr_pagination_drafts_native_links_branches_and_local_duplicates(self):
         rows = [assignment(number) for number in range(1, 7)]
+        # In this 31-PR scan the first page serializes nested hasNextPage: false
+        # before the outer hasNextPage: true, just as requested by OPEN_PRS.
         code, out, err, calls = self.select(
-            rows, [pr_page(pr(20, "agent/issue-1-old", draft=True),
-                           pr(21, links=[(2, read_ready.REPOSITORY), (6, "other/repo")]), more=True),
-                    pr_page(pr(22, "agent/issue-3"), pr(23, "agent/issue-60-other"))],
+            rows, pr_page(pr(20, "agent/issue-1-old", draft=True),
+                          pr(21, links=[(2, read_ready.REPOSITORY), (6, "other/repo")]),
+                          pr(22, "agent/issue-60-other"), *(pr(n) for n in range(23, 50)),
+                          more=True, cursor="outer-page-1"),
+            pr_page(pr(50, "agent/issue-3"), cursor="outer-page-2"),
             issue_prs(),
             local={4: "existing local run issue-4; Lead triage", 5: "existing registered worktree; Lead triage"},
         )
         self.assertEqual((code, err), (0, ""))
-        for number, reason in enumerate(("draft PR #20", "PR #21", "PR #22", "local run", "worktree"), 1):
+        for number, reason in enumerate(("draft PR #20", "PR #21", "PR #50", "local run", "worktree"), 1):
             self.assertRegex(out, rf"SKIP #{number} .*{reason}")
         self.assertIn('Next issue: #6 "Work 6"', out)
-        self.assertIn("--paginate", calls[-2])
-        self.assertIn("--slurp", calls[-2])
+        first, second = [command for command in calls if f"query={ready_selection.OPEN_PRS}" in command]
+        self.assertFalse(any(arg.startswith("endCursor=") for arg in first))
+        self.assertEqual(second, first + ["-f", "endCursor=outer-page-1"])
+        self.assertNotIn("--paginate", first)
+        self.assertNotIn("--slurp", first)
+
+    def test_open_pr_pagination_errors_fail_closed(self):
+        first = pr_page(pr(70), more=True)
+        second_error = {"data": {"repository": None}, "errors": [{"message": "permission denied"}]}
+        for pages, error in (
+            ([pr_page(pr(70), more=True, cursor=None)], "missing or invalid cursor"),
+            ([first, pr_page(pr(71), more=True)], "repeated cursor"),
+            ([first, second_error], "GraphQL error"),
+            ([first, subprocess.CompletedProcess([], 1, "", "Forbidden (HTTP 403)")], "HTTP 403"),
+        ):
+            with self.subTest(error=error):
+                code, out, err, calls = self.select([assignment(1)], *pages)
+                self.assertEqual((code, out), (1, ""))
+                self.assertIn("Open pull requests: ", err)
+                self.assertIn(error, err)
+                self.assertEqual(sum(f"query={ready_selection.OPEN_PRS}" in cmd for cmd in calls), len(pages))
 
     def test_selection_fails_closed_on_api_auth_and_incomplete_pr_reads(self):
         incomplete = pr(75)
         incomplete["closingIssuesReferences"]["pageInfo"]["hasNextPage"] = True
         for payload, error in (
             (subprocess.CompletedProcess([], 4, "", "auth details"), "authentication failed"),
-            ([{"errors": [{"message": "permission denied"}]}], "GraphQL error"),
-            ([pr_page(more=True)], "incomplete pagination"),
-            ([pr_page(incomplete)], "closing issue links could not be fully verified"),
+            ({"errors": [{"message": "permission denied"}]}, "GraphQL error"),
+            (pr_page(incomplete), "closing issue links could not be fully verified"),
         ):
             with self.subTest(error=error):
                 code, out, err, _ = self.select([assignment(1)], payload)
@@ -378,12 +400,12 @@ class SelectionTests(unittest.TestCase):
             ({"data": {"repository": {"issue": None}}}, "closing issue links could not be verified"),
         ):
             with self.subTest(error=error):
-                code, out, err, _ = self.select([assignment(1)], [pr_page()], payload)
+                code, out, err, _ = self.select([assignment(1)], pr_page(), payload)
                 self.assertEqual((code, out), (1, ""))
                 self.assertIn("Linked pull requests for #1:", err)
                 self.assertIn(error, err)
         code, out, err, _ = self.select(
-            [assignment(1, blockers=[blocker(98, "closed", "completed")])], [pr_page()], issue_prs(),
+            [assignment(1, blockers=[blocker(98, "closed", "completed")])], pr_page(), issue_prs(),
             subprocess.CompletedProcess([], 1, "", "Forbidden (HTTP 403)"),
         )
         self.assertEqual((code, out), (1, ""))

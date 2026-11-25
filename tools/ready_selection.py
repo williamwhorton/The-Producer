@@ -84,20 +84,32 @@ def repository_result(page, context):
 
 def open_prs(read):
     context = "Open pull requests"
-    pages = repository_query(read, context, OPEN_PRS, "--paginate", "--slurp")
-    if not isinstance(pages, list) or not pages:
-        raise SelectionError(f"{context}: GitHub returned no pages")
     result = []
-    for index, page in enumerate(pages):
+    seen_cursors = set()
+    cursor_args = ()
+    while True:
+        # gh --paginate can read hasNextPage from the nested closing links
+        # instead of the outer pullRequests connection.
+        page = repository_query(read, context, OPEN_PRS, *cursor_args)
         prs = repository_result(page, context)["pullRequests"]
-        if prs["pageInfo"]["hasNextPage"] is not (index < len(pages) - 1):
-            raise SelectionError(f"{context}: incomplete pagination")
         for pr in prs["nodes"]:
             refs = pr["closingIssuesReferences"]
             if not refs or refs["pageInfo"]["hasNextPage"] is not False:
                 raise SelectionError(f"PR #{pr['number']}: closing issue links could not be fully verified")
             result.append((pr, {issue["number"] for issue in refs["nodes"]
                                 if issue["repository"]["nameWithOwner"].casefold() == REPOSITORY.casefold()}))
+        page_info = prs["pageInfo"]
+        if page_info["hasNextPage"] is False:
+            break
+        if page_info["hasNextPage"] is not True:
+            raise SelectionError(f"{context}: invalid pagination flag")
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor.strip():
+            raise SelectionError(f"{context}: missing or invalid cursor")
+        if cursor in seen_cursors:
+            raise SelectionError(f"{context}: repeated cursor")
+        seen_cursors.add(cursor)
+        cursor_args = ("-f", f"endCursor={cursor}")
     return sorted(result, key=lambda entry: entry[0]["number"])
 
 
