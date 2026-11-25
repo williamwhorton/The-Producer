@@ -2,11 +2,13 @@ import io
 import json
 import os
 import subprocess
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
-from tools import read_ready
+from tools import read_ready, ready_selection
 
 
 def project_page(*nodes, more=False, field=True):
@@ -29,7 +31,7 @@ def item(number, repo=read_ready.REPOSITORY, *, kind="ISSUE", status="ready-id")
 
 
 class ReadReadyTests(unittest.TestCase):
-    def run_cli(self, responses=(), number="7"):
+    def run_cli(self, responses=(), number="7", *, select=False, local=None):
         # Mock the process boundary, preserving gh --slurp's nested REST arrays
         # and per-page GraphQL envelopes rather than passing flattened records.
         responses = [
@@ -39,8 +41,9 @@ class ReadReadyTests(unittest.TestCase):
         ]
         stdout, stderr = io.StringIO(), io.StringIO()
         with (patch.dict(os.environ, {"PROJECT_NUMBER": number}),
-              patch.object(read_ready.sys, "argv", ["read_ready.py"]),
+              patch.object(read_ready.sys, "argv", ["read_ready.py"] + (["--select"] if select else [])),
               patch.object(read_ready.subprocess, "run", side_effect=responses) as run,
+              patch.object(ready_selection, "local_work", return_value=local or {}),
               redirect_stdout(stdout), redirect_stderr(stderr)):
             code = read_ready.main()
         return code, stdout.getvalue(), stderr.getvalue(), [call.args[0] for call in run.call_args_list]
@@ -144,6 +147,228 @@ class ReadReadyTests(unittest.TestCase):
         ])
         self.assertEqual((code, out), (1, ""))
         self.assertIn("#99/dependencies/blocked_by: GitHub API/CLI error (HTTP 403)", err)
+
+
+def blocker(number, state="open", reason=None, repo=read_ready.REPOSITORY):
+    return {"number": number, "state": state, "state_reason": reason,
+            "html_url": f"https://github.com/{repo}/issues/{number}"}
+
+
+def fields_for(*, priority="High", workstream="Infrastructure", approval="No"):
+    return [
+        {"issue_field_id": i, "issue_field_name": name, "data_type": "single_select",
+         "value": i + 10, "single_select_option": {"id": i + 10, "name": value}}
+        for i, (name, value) in enumerate(
+            [("Priority", priority), ("Workstream", workstream), ("Human Approval Required", approval)], 1)
+        if value is not None
+    ]
+
+
+def assignment(number, *, blockers=(), fields=None, **changes):
+    declaration = "native" if blockers else "none"
+    issue = {
+        "number": number, "state": "open", "title": f"Work {number}", "type": {"name": "Task"},
+        "labels": [{"name": "agent:developer"}], "assignees": [],
+        "body": f"## Acceptance criteria\n- Deliver a tested change.\n"
+                f"Selection-ready implementation; prerequisites: {declaration}",
+        "issue_dependencies_summary": {
+            "blocked_by": len({b["html_url"] for b in blockers if b.get("state") == "open"}),
+            "total_blocked_by": len({b["html_url"] for b in blockers}),
+            "blocking": 0, "total_blocking": 0,
+        },
+        **changes,
+    }
+    return issue, [fields_for() if fields is None else fields], [list(blockers)]
+
+
+def pr(number, branch="feature", *, body="", draft=False, links=()):
+    return {"number": number, "headRefName": branch, "body": body, "isDraft": draft,
+            "closingIssuesReferences": {
+                "nodes": [{"number": n, "repository": {"nameWithOwner": repo}} for n, repo in links],
+                "pageInfo": {"hasNextPage": False},
+            }}
+
+
+def pr_page(*prs, more=False):
+    return {"data": {"repository": {"pullRequests": {
+        "nodes": prs, "pageInfo": {"hasNextPage": more, "endCursor": "pr-cursor" if prs else None},
+    }}}}
+
+
+def closing_pr(**changes):
+    return {"__typename": "PullRequest", "number": 99, "merged": True, "baseRefName": "main",
+            "repository": {"nameWithOwner": read_ready.REPOSITORY},
+            "mergedBy": {"login": read_ready.OWNER}, **changes}
+
+
+def closure(closer, *, actor=read_ready.OWNER, author=read_ready.OWNER, editor=None, body=""):
+    return {"data": {"repository": {"issue": {
+        "state": "CLOSED", "stateReason": "COMPLETED", "body": body,
+        "author": {"login": author}, "editor": {"login": editor} if editor else None,
+        "timelineItems": {"nodes": [
+            {"__typename": "ClosedEvent", "actor": {"login": actor}, "closer": closer}
+        ]},
+    }}}}
+
+
+class SelectionTests(unittest.TestCase):
+    run_cli = ReadReadyTests.run_cli
+
+    def select(self, assignments, *extra, local=None, items=None):
+        numbers = [row[0]["number"] for row in assignments]
+        board = [project_page(*(items if items is not None else map(item, reversed(numbers))))]
+        return self.run_cli([board, *(value for row in assignments for value in row), *extra],
+                            select=True, local=local)
+
+    def test_ranking_counts_unique_direct_successors_with_no_other_blockers(self):
+        rows = [
+            assignment(10, fields=fields_for(priority="Urgent")),
+            assignment(11, fields=fields_for(priority="Low"), type={"name": "Spike"}),
+            assignment(12, fields=fields_for(priority="Urgent")),
+            assignment(13, blockers=[blocker(11), blocker(11)]),
+            assignment(14, blockers=[blocker(10), blocker(11)]),
+            assignment(15, blockers=[blocker(10)], assignees=[{"login": "director", "type": "User"}]),
+            assignment(16, blockers=[blocker(13)]),
+        ]
+        code, out, err, _ = self.select(rows, [pr_page()],
+                                        items=[*(item(n) for n in range(16, 9, -1)),
+                                               item(13), item(3, "other/repo"),
+                                               item(4, kind="PULL_REQUEST"), item(5, status="done")])
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn('  #11 "Work 11" — unlocks 1 Ready issue(s); Low', out)
+        self.assertLess(out.index('  #11 "'), out.index('  #10 "'))
+        self.assertLess(out.index('  #10 "'), out.index('  #12 "'))
+        self.assertIn('Next issue: #11 "Work 11"', out)
+        self.assertEqual(out.count("WAIT #13 "), 1)
+        self.assertIn("WAIT #16 ", out)
+        self.assertIn("human or unverified assignee", out)
+
+    def test_metadata_scope_and_legacy_are_not_inferred(self):
+        rows = [
+            assignment(1, type=None, body="**Issue Type:** Task"),
+            assignment(2, fields=fields_for(priority="P0")),
+            assignment(3, fields=fields_for(workstream=None)),
+            assignment(4, fields=fields_for(approval="Yes")),
+            assignment(5, fields=fields_for(approval=None)),
+            assignment(6, body="## Dependencies\nPrevious work must finish before this."),
+            assignment(7, blockers=[blocker(1)],
+                       body="Deliver tests.\nSelection-ready implementation; prerequisites: none"),
+            assignment(8, type={"name": "Design Decision"}),
+            assignment(9, labels=[]),
+            assignment(10, state="closed"),
+            assignment(11, fields=fields_for() + fields_for()),  # duplicate field names
+            assignment(12, issue_dependencies_summary={"total_blocked_by": 1}),
+        ]
+        code, out, err, calls = self.select(rows)
+        self.assertEqual((code, err, len(calls)), (0, "", 1 + 3 * len(rows)))
+        reasons = ("native Type", "native Priority", "native Workstream", "approval is outstanding",
+                   "native Human Approval Required", "legacy prerequisite reconciliation not confirmed",
+                   "disagrees with native Blocked by", "Design Decision is human-owned",
+                   "missing agent:developer", "not open", "ambiguous native Priority", "count unavailable")
+        for number, reason in enumerate(reasons, 1):
+            self.assertRegex(out, rf"SKIP #{number} [^\n]+{reason}")
+        self.assertIn("No eligible work.", out)
+
+    def test_closed_dependencies_need_direct_accepted_completion(self):
+        rows = [
+            assignment(1, blockers=[blocker(90, "closed", "completed")]),
+            assignment(2, blockers=[blocker(91, "closed", "completed")]),
+            assignment(3, blockers=[blocker(92, "closed", "not_planned")]),
+            assignment(4, blockers=[blocker(93, "closed", "completed", "other/repo")]),
+            assignment(5, blockers=[blocker(90, "closed", "completed")]),
+            assignment(6, blockers=[blocker(94, "closed", "completed")]),
+        ]
+        code, out, err, calls = self.select(
+            rows, [pr_page()], closure(closing_pr()), closure(None, body="Selection completion: non-code"),
+            subprocess.CompletedProcess([], 1, json.dumps({
+                "data": {"repository": {"issue": None}},
+                "errors": [{"type": "NOT_FOUND", "path": ["repository", "issue"],
+                            "message": "Could not resolve to an Issue with the number of 94."}],
+            }), "gh: Could not resolve to an Issue with the number of 94."),
+        )
+        self.assertEqual((code, err, len(calls)), (0, "", 1 + 3 * len(rows) + 4))
+        for number in (1, 2, 5):
+            self.assertIn(f'  #{number} "Work {number}" — unlocks 0', out)
+        self.assertRegex(out, r"WAIT #3 .*not_planned")
+        self.assertRegex(out, r"WAIT #4 .*external or inaccessible")
+        self.assertRegex(out, r"WAIT #6 .*prerequisite inaccessible")
+        self.assertTrue(any("number=90" in command for command in calls))
+
+    def test_unaccepted_closures_remain_waiting(self):
+        for payload in (
+            closure(closing_pr(merged=False)), closure(closing_pr(baseRefName="develop")),
+            closure(closing_pr(mergedBy={"login": "someone-else"})),
+            closure(closing_pr(repository={"nameWithOwner": "other/The-Producer"})),
+            closure({"__typename": "Commit"}), closure(None),
+            closure(None, actor="not-owner", body="Selection completion: non-code"),
+            closure(None, editor="not-owner", body="Selection completion: non-code"),
+        ):
+            with self.subTest(payload=payload):
+                code, out, err, _ = self.select(
+                    [assignment(3, blockers=[blocker(98, "closed", "completed")])], [pr_page()], payload,
+                )
+                self.assertEqual((code, err), (0, ""))
+                self.assertRegex(out, r"WAIT #3 .*no owner-accepted closing merge")
+                self.assertIn("No eligible work.", out)
+
+    def test_pr_pagination_drafts_native_links_body_and_local_duplicates(self):
+        rows = [assignment(number) for number in range(1, 7)]
+        code, out, err, calls = self.select(
+            rows, [pr_page(pr(20, "agent/issue-1-old", draft=True),
+                           pr(21, links=[(2, read_ready.REPOSITORY), (6, "other/repo")]), more=True),
+                   pr_page(pr(22, body="Fixes #3"), pr(23, "agent/issue-60-other"))],
+            local={4: "existing local run issue-4; Lead triage", 5: "existing registered worktree; Lead triage"},
+        )
+        self.assertEqual((code, err), (0, ""))
+        for number, reason in enumerate(("draft PR #20", "PR #21", "PR #22", "local run", "worktree"), 1):
+            self.assertRegex(out, rf"SKIP #{number} .*{reason}")
+        self.assertIn('Next issue: #6 "Work 6"', out)
+        self.assertIn("--paginate", calls[-1])
+        self.assertIn("--slurp", calls[-1])
+
+    def test_selection_fails_closed_on_api_auth_and_incomplete_pr_reads(self):
+        incomplete = pr(75)
+        incomplete["closingIssuesReferences"]["pageInfo"]["hasNextPage"] = True
+        for payload, error in (
+            (subprocess.CompletedProcess([], 4, "", "auth details"), "authentication failed"),
+            ([{"errors": [{"message": "permission denied"}]}], "GraphQL error"),
+            ([pr_page(more=True)], "incomplete pagination"),
+            ([pr_page(incomplete)], "closing issue links could not be fully verified"),
+        ):
+            with self.subTest(error=error):
+                code, out, err, _ = self.select([assignment(1)], payload)
+                self.assertEqual((code, out), (1, ""))
+                self.assertIn(error, err)
+        code, out, err, _ = self.select(
+            [assignment(1, blockers=[blocker(98, "closed", "completed")])], [pr_page()],
+            subprocess.CompletedProcess([], 1, "", "Forbidden (HTTP 403)"),
+        )
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("Closure of prerequisite #98", err)
+        self.assertIn("HTTP 403", err)
+
+    def test_local_runner_conventions_use_primary_checkout_even_from_linked_checkout(self):
+        with tempfile.TemporaryDirectory() as root:
+            primary = Path(root) / "The-Producer"
+            child = primary.with_name("The-Producer-agent-5-abc")
+            detached = primary.with_name("The-Producer-review-6-stamp-pr15")
+            legacy = primary.with_name("The-Producer-issue-7-old")
+            run_home = primary.with_name(".The-Producer-agent-runs")
+            for name in ("issue-3", "issue-4-review-pr-15-stamp", "issue-8-history-stamp"):
+                (run_home / name).mkdir(parents=True)
+            trees = [
+                {"path": primary, "branch": "refs/heads/main"},
+                {"path": child, "branch": "refs/heads/agent/issue-5-abc"},
+                {"path": detached, "detached": ""},
+                {"path": legacy, "branch": "refs/heads/legacy"},
+            ]
+            with (patch.object(ready_selection.Path, "cwd", return_value=child),
+                  patch.object(ready_selection, "registered_worktrees", return_value=trees) as worktrees,
+                  patch.object(ready_selection, "run_cmd", return_value="https://github.com/" + read_ready.REPOSITORY)):
+                found = ready_selection.local_work()
+            worktrees.assert_called_once_with(child)
+            self.assertEqual(set(found), {3, 4, 5, 6, 7})
+            self.assertEqual(len(list(run_home.iterdir())), 3)
 
 
 if __name__ == "__main__":
