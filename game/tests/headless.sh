@@ -30,3 +30,4 @@ check --script res://tests/scheduler.gd
 check --script res://tests/house_navigation.gd
 check --script res://tests/scenario_loading.gd
 check --script res://tests/contestant_runtime.gd
+check --script res://tests/contestant_perception.gd

@@ -81,9 +81,9 @@ absence of a cue, actors alternate between resting in the parlor and reading
 in the study. These activity spots and the decision cadence are placeholders,
 not final needs, timing, or content.
 
-A simulation-only disturbance input names a walkable cell, not an actor, goal,
-or chosen reaction. Each actor considers the latest cue once, at the next
-decision point after its current route. Private placeholder motives favor
+A simulation-only startle input names a walkable cell and the actual witnesses,
+not a goal or chosen reaction. Each witness considers their latest startle once
+at the next decision point after their current route. Private placeholder motives favor
 either investigating a nearby lead or avoiding the cue by taking refuge in the
 other room. If the cue blocks the only path to refuge, the avoider waits for
 that reaction instead of crossing it. From #5, circumstances and motives
@@ -104,3 +104,34 @@ godot --headless --path game --script res://tests/contestant_runtime.gd
 ```
 
 Expect `PASS: authored contestant autonomy, seeded choices, legal movement, and preview isolation`.
+
+## Private perception and memory (#32)
+
+`perceive_event()` accepts a walkable event cell, a perceived cue category, and
+the IDs of the contestants who actually witnessed it. The simulation or test
+fixture supplies this list; being in the cast or visible to a producer camera
+does not imply witnessing an event. An empty list changes nothing and an unknown
+ID rejects the delivery. The original `present_disturbance()` remains the #31
+shared fixture: it explicitly assumes all contestants perceived the same startle.
+
+Each witness keeps a private bounded history of the cue, cell and simulation
+tick. Fear, stress, belief in a haunting, and suspicion of deliberate staging
+are distinct. A startle raises fear without assigning a cause; apparent anomalous
+evidence and signs of staging support separate suspicions that can coexist.
+Synthetic chronic exposure raises that witness's effective stress baseline and
+makes the same startle more frightening. Synthetic relief removes that chronic
+stress without erasing the acute fear. Appraisal is not an action order: routes and motives
+still govern decisions, including opposite reactions at identical fear.
+
+The integer values, history cap and immediate relief are implementation/test
+placeholders, not final mechanics or balance. This slice does not model passive
+recovery, residual stress, cue habituation, personality thresholds, sensory
+range or communication delivery. There is no dialogue, producer intervention,
+entity or departure behavior. There are no new public observations: the preview
+still consumes only the detached static plan and optional example route.
+
+```sh
+godot --headless --path game --script res://tests/contestant_perception.gd
+```
+
+Expect `PASS: private witness memory, separate appraisals, autonomous decisions, and no preview leakage`.
