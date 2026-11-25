@@ -5,7 +5,7 @@
 ## Scope: different concepts
 
 - **Issue Type** identifies the kind of work and its expected deliverable. Configure through GitHub Issue Types.
-- **Issue fields** (Priority, Effort, Workstream, Human Approval Required) add issue metadata. **Pin to types** controls which types display a field by default; it does **not** assign a field value.
+- **Issue fields** (Priority, Effort, Workstream, Requires human approval) add issue metadata. **Pin to types** controls which types display a field by default; it does **not** assign a field value.
 - **Project Status** records workflow progress on the GitHub Projects board. It is separate from Issue Type and Priority.
 - **Dependencies** determine whether work is ready. High priority is not permission to bypass a blocked decision.
 
@@ -58,7 +58,7 @@ Existing GitHub issues have **native Type fields**; use the safe [metadata impor
 | **Priority** | ✓ | ✓ | ✓ | ✓ | ✓ |
 | **Effort** | ✓ | ✓ | ✓ | ✓ | — |
 | **Workstream** | ✓ | ✓ | ✓ | ✓ | ✓ |
-| **Human Approval Required** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Requires human approval** | ✓ | ✓ | ✓ | ✓ | ✓ |
 | **Start Date** | — | — | — | — | — |
 | **Target Date** | — | — | — | — | — |
 
@@ -66,8 +66,8 @@ Also pin **Priority** and **Workstream** to **Issues without a type**, if GitHub
 
 - **Priority** belongs on all types because design choices and research can block a milestone.
 - **Effort** is useful for implementation, repairs and research; omit from Design Decisions by default since estimating a decision isn't especially informative.
-- **Workstream** distinguishes domain (Design, Architecture, Infrastructure, Simulation, QA) from the kind of work. It applies to every type.
-- **Human Approval Required** is visible everywhere because agents need to know whether they can proceed. **Visibility does not imply a default Yes or No**. Any creative/major architectural choice requires approval regardless of this field's current value.
+- **Workstream** is a multi-select field that distinguishes domain (Design, Architecture, Infrastructure, Simulation, QA) from the kind of work. It applies to every type.
+- **Requires human approval** is a single-select field visible everywhere because agents need to know whether they can proceed. **Visibility does not imply a default Yes or No**. Any creative/major architectural choice requires approval regardless of this field's current value.
 - **Start Date** and **Target Date** remain unpinned until there is a real scheduling requirement. Do not invent dates merely to populate fields.
 
 ## Priority vocabulary: use readable names

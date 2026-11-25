@@ -9,9 +9,9 @@ import subprocess
 import sys
 
 if __package__:
-    from .ready_selection import SelectionError, select
+    from .ready_selection import APPROVAL_FIELD, SelectionError, native_options, select
 else:
-    from ready_selection import SelectionError, select
+    from ready_selection import APPROVAL_FIELD, SelectionError, native_options, select
 
 OWNER = "williamwhorton"
 REPOSITORY = f"{OWNER}/The-Producer"
@@ -157,13 +157,10 @@ def ready_issue(number):
 
 def issue_lines(number):
     issue, values, blockers = ready_issue(number)
-    fields = {field.get("issue_field_name"): field
-              for field in values}
 
-    def option(name):
-        if name not in fields:
-            return UNAVAILABLE if None in fields else MISSING
-        return (fields[name].get("single_select_option") or {}).get("name") or UNAVAILABLE
+    def option(name, *, allow_multiple=False):
+        names = native_options(values, name, allow_multiple=allow_multiple)
+        return UNAVAILABLE if names is None else ", ".join(names) or MISSING
 
     labels = issue.get("labels")
     assigned = issue.get("assignees")
@@ -182,7 +179,8 @@ def issue_lines(number):
     lines = [
         f"#{number} {json.dumps(issue['title'], ensure_ascii=False)}",
         f"  agent:developer: {developer}; human assignees: {assignees}",
-        f"  Type: {issue_type}; Priority: {option('Priority')}; Workstream: {option('Workstream')}",
+        f"  Type: {issue_type}; Priority: {option('Priority')}; "
+        f"Workstream: {option('Workstream', allow_multiple=True)}; {APPROVAL_FIELD}: {option(APPROVAL_FIELD)}",
         "  Blocked by:" if blockers else "  Blocked by: (none)",
     ]
     for blocker in blockers:

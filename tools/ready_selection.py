@@ -13,6 +13,7 @@ else:
 OWNER, REPO = REPOSITORY.split("/")
 PRIORITIES = ("Urgent", "High", "Medium", "Low")
 IMPLEMENTATION_TYPES = {"Feature", "Bug", "Task", "Spike"}
+APPROVAL_FIELD = "Requires human approval"
 
 OPEN_PRS = """
 query ($owner: String!, $repo: String!, $endCursor: String) {
@@ -171,12 +172,45 @@ def local_work():
     return found
 
 
-def native_option(fields, name):
-    rows = [field for field in fields if field.get("issue_field_name") == name]
-    if len(rows) != 1:
+def native_options(fields, name, *, allow_multiple=False):
+    """Return option names, () for an absent field, or None if not verifiable."""
+    rows = []
+    for field in fields:
+        if not isinstance(field, dict) or not valid_name(field.get("issue_field_name")):
+            return None
+        if field["issue_field_name"] == name:
+            rows.append(field)
+    if not rows:
+        return ()
+    if len(rows) > 1:
         return None
-    value = (rows[0].get("single_select_option") or {}).get("name")
-    return value if isinstance(value, str) and value.strip() and value.strip() == value else None
+    row = rows[0]
+    if (row.get("data_type") == "single_select"
+            and row.get("multi_select_options") in (None, [])):
+        options = [row.get("single_select_option")]
+    elif (allow_multiple and row.get("data_type") == "multi_select"
+          and row.get("single_select_option") is None):
+        options = row.get("multi_select_options")
+    else:
+        return None
+    if not isinstance(options, list) or not options:
+        return None
+    names = []
+    for option in options:
+        value = option.get("name") if isinstance(option, dict) else None
+        if not valid_name(value) or value in names:
+            return None
+        names.append(value)
+    return tuple(names)
+
+
+def valid_name(value):
+    return isinstance(value, str) and bool(value.strip()) and value.strip() == value
+
+
+def native_option(fields, name):
+    names = native_options(fields, name)
+    return names[0] if names else None
 
 
 def nonempty_body_lines(body):
@@ -200,12 +234,12 @@ def exclusion(issue, fields, blockers):
         return "Design Decision is human-owned" if kind == "Design Decision" else "missing or invalid native Type"
     if native_option(fields, "Priority") not in PRIORITIES:
         return "missing, invalid or ambiguous native Priority"
-    if not native_option(fields, "Workstream"):
+    if not native_options(fields, "Workstream", allow_multiple=True):
         return "missing or ambiguous native Workstream"
-    approval = native_option(fields, "Human Approval Required")
+    approval = native_option(fields, APPROVAL_FIELD)
     if approval != "No":
         return ("human approval is outstanding" if approval == "Yes"
-                else "missing or ambiguous native Human Approval Required")
+                else f"missing or ambiguous native {APPROVAL_FIELD}")
 
     body = nonempty_body_lines(issue.get("body"))
     prefix = "Selection-ready implementation;"
