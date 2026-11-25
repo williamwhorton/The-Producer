@@ -2,6 +2,9 @@ import argparse
 import io
 import json
 import os
+import signal
+import subprocess
+import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import tempfile
@@ -23,29 +26,41 @@ class PilotTests(unittest.TestCase):
                                           Selection([14], ["Next issue: #14"])])
         self.execute = Mock(side_effect=self.fake_runner)
         self.identity = Mock(return_value={"login": pilot.board.OWNER})
+        self.board_read = Mock(return_value=("Board", "board-url", {"Ready": [14, 15]}))
+        self.branch = "main"
         self.stdout, self.stderr = io.StringIO(), io.StringIO()
 
     def fake_runner(self, args, *, claim, verify_status):
-        self.assertEqual((args.issue, args.model, args.approve_issue, args.retry_blocked),
-                         (14, "openai/test", True, False))
+        self.assertEqual((args.model, args.approve_issue, args.retry_blocked),
+                         ("openai/test", True, False))
         claim(args.issue)
         verify_status(args.issue, "In Progress")
         print("one fake Build + independent Reviewer")
         verify_status(args.issue, "In Review", pending="In Progress")
         return 0
 
-    def run_cli(self, *args, number="7"):
+    def run_cli(self, *args, number="7", with_signals=False):
+        def git(argv, _repo):
+            if argv == ["git", "branch", "--show-current"]:
+                return self.branch
+            self.assertEqual(argv, ["git", "remote", "get-url", "origin"])
+            return "https://github.com/" + pilot.board.REPOSITORY
+
         with (patch.dict(os.environ, {"PROJECT_NUMBER": number}),
               patch.object(pilot.Path, "cwd", return_value=self.repo),
               patch.object(pilot.runner, "registered_worktrees", return_value=[{"path": self.repo}]),
-              patch.object(pilot.runner, "run_cmd", return_value="https://github.com/" + pilot.board.REPOSITORY),
-              patch.object(pilot.board, "project_issues", return_value=("Board", "board-url", {"Ready": [14, 15]})),
+              patch.object(pilot.runner, "run_cmd", side_effect=git),
+              patch.object(pilot.board, "project_issues", self.board_read),
               patch.object(pilot.board, "gh_json", self.identity),
               patch.object(pilot.selector, "select", self.selection),
               patch.object(pilot, "Project", return_value=self.project),
               patch.object(pilot.runner, "orchestrate", self.execute),
               redirect_stdout(self.stdout), redirect_stderr(self.stderr)):
-            return pilot.main(["--model", "openai/test", *args])
+            argv = ["--model", "openai/test", *args]
+            if with_signals:
+                with patch.object(pilot.sys, "argv", ["run_ready.py", *argv]):
+                    return pilot.cli()
+            return pilot.main(argv)
 
     def test_no_work_does_not_start_runner_or_create_lock(self):
         self.selection.side_effect = [Selection([], ["No eligible work."])]
@@ -56,12 +71,14 @@ class PilotTests(unittest.TestCase):
         self.assertFalse(self.run_home.exists())
 
     def test_dry_run_has_no_writes_or_sessions(self):
-        self.assertEqual(self.run_cli("--dry-run"), 0)
+        self.branch = "agent/issue-14"
+        self.assertEqual(self.run_cli("--dry-run", "--expect-issue", "14"), 0)
         self.assertIn("would claim #14", self.stdout.getvalue())
         self.execute.assert_not_called()
         self.identity.assert_not_called()
         self.project.post.assert_not_called()
         self.assertFalse(self.run_home.exists())
+        self.board_read.assert_called_once_with(7)
 
     def test_expected_issue_does_not_override_ranking(self):
         self.assertEqual(self.run_cli("--expect-issue", "15"), 1)
@@ -223,6 +240,151 @@ class PilotTests(unittest.TestCase):
         self.assertIn("Active or unfinished run", self.stderr.getvalue())
         self.execute.assert_not_called()
         self.project.post.assert_not_called()
+
+    def test_continuous_refreshes_independent_work_then_waits_for_human_merge(self):
+        merged = False
+        self.board_read.side_effect = [
+            ("Board", "board-url", {"Ready": numbers})
+            for numbers in ([14, 15, 16], [15, 16], [16], [16], [])
+        ]
+
+        def select(numbers, *_):
+            if numbers == [16] and not merged:
+                return Selection([], ["WAIT #16: prerequisite #14 has not been accepted"])
+            return Selection([n for n in numbers if n != 16 or merged], ["Selection snapshot"])
+
+        def idle(seconds):
+            nonlocal merged
+            self.assertEqual(seconds, 1)
+            with self.assertRaisesRegex(pilot.runner.Blocked, "holds the local lock"):
+                with pilot.pilot_lock(self.run_home):
+                    self.fail("overlapping Ready run acquired the lock")
+            if merged:
+                raise KeyboardInterrupt
+            self.assertEqual([c.args[0].issue for c in self.execute.call_args_list], [14, 15])
+            merged = True
+
+        self.selection.side_effect = select
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "In Review"] * 3
+        with (patch.object(pilot.time, "sleep", side_effect=idle) as sleep,
+              patch.object(pilot, "pilot_lock", wraps=pilot.pilot_lock) as lock,
+              patch.object(pilot, "refuse_active_work", wraps=pilot.refuse_active_work) as active):
+            self.assertEqual(self.run_cli("--continuous", "--poll-seconds", "1"), 130)
+            self.assertEqual(lock.call_count, 3)  # one session plus the two refused probes
+            self.assertEqual(active.call_count, 5)
+            self.assertEqual(sleep.call_count, 2)
+        self.assertEqual([c.args[0].issue for c in self.execute.call_args_list], [14, 15, 16])
+        self.assertEqual(self.board_read.call_count, 5)
+        self.assertIn("WAIT #16", self.stdout.getvalue())
+        with pilot.pilot_lock(self.run_home):
+            pass  # Released on interrupt.
+
+    def test_continuous_stops_after_nonzero_runner_exit(self):
+        def quota_failure(args, *, claim, verify_status):
+            claim(args.issue)
+            return 9
+
+        self.execute.side_effect = quota_failure
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Blocked"]
+        self.assertEqual(self.run_cli("--continuous"), 1)
+        self.board_read.assert_called_once_with(7)
+        self.execute.assert_called_once()
+        self.assertEqual(self.project.post.call_args_list, [call(14, "In Progress"), call(14, "Blocked")])
+
+    def test_continuous_stops_on_api_error_refreshing_after_handoff(self):
+        self.board_read.side_effect = [self.board_read.return_value, pilot.board.ReadError("API unavailable")]
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "In Review"]
+        self.assertEqual(self.run_cli("--continuous"), 1)
+        self.assertIn("API unavailable", self.stderr.getvalue())
+        self.execute.assert_called_once()
+        self.project.post.assert_called_once_with(14, "In Progress")
+
+    def test_continuous_rechecks_new_unfinished_local_state_after_handoff(self):
+        def execute(*args, **kwargs):
+            result = self.fake_runner(*args, **kwargs)
+            entry = self.run_home / "issue-99"
+            entry.mkdir()
+            (entry / "state.json").write_text('{"phase": "developing"}')
+            return result
+
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "In Review"]
+        self.execute.side_effect = execute
+        self.assertEqual(self.run_cli("--continuous"), 1)
+        self.assertIn("Active or unfinished run", self.stderr.getvalue())
+        self.board_read.assert_called_once_with(7)
+        self.execute.assert_called_once()
+
+    def test_continuous_idle_sigterm_exits_before_refresh(self):
+        self.selection.side_effect = [Selection([], ["No eligible work."])]
+        before = signal.getsignal(signal.SIGTERM)
+        with patch.object(pilot.time, "sleep", side_effect=lambda _: signal.raise_signal(signal.SIGTERM)) as idle:
+            self.assertEqual(self.run_cli("--continuous", with_signals=True), 130)
+        idle.assert_called_once_with(60)
+        self.assertIs(signal.getsignal(signal.SIGTERM), before)
+        self.board_read.assert_called_once_with(7)
+        self.execute.assert_not_called()
+        self.project.post.assert_not_called()
+
+    def test_sigterm_during_agent_start_stops_the_child_and_session(self):
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "Blocked"]
+        popen = subprocess.Popen
+        children = []
+        log = self.repo / "stand-in-agent.log"
+        self.repo.mkdir()
+
+        def start_and_interrupt(*args, **kwargs):
+            process = popen(*args, **kwargs)
+            children.append(process)
+            signal.raise_signal(signal.SIGTERM)
+            return process
+
+        def execute(args, *, claim, verify_status):
+            claim(args.issue)
+            pilot.runner.run_agent(
+                [sys.executable, "-c", "import threading; threading.Event().wait()"],
+                self.repo, log, 5,
+            )
+            self.fail("interrupted agent returned normally")
+
+        self.execute.side_effect = execute
+        with patch.object(pilot.runner.subprocess, "Popen", side_effect=start_and_interrupt):
+            self.assertEqual(self.run_cli("--continuous", with_signals=True), 1)
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertTrue(log.exists())
+        self.assertIn("Agent stopped (timeout or interruption)", self.stderr.getvalue())
+        self.board_read.assert_called_once_with(7)
+        self.project.post.assert_has_calls([call(14, "In Progress"), call(14, "Blocked")])
+
+    def test_continuous_rechecks_branch_after_idle(self):
+        self.selection.side_effect = [Selection([], ["No eligible work."])]
+
+        def change_branch(_):
+            self.branch = "agent/issue-14"
+
+        with patch.object(pilot.time, "sleep", side_effect=change_branch):
+            self.assertEqual(self.run_cli("--continuous"), 1)
+        self.assertIn("require the primary checkout on main; found agent/issue-14", self.stderr.getvalue())
+        self.board_read.assert_called_once_with(7)
+        self.execute.assert_not_called()
+
+    def test_live_non_main_refused_before_board_or_active_process_checks(self):
+        self.branch = "agent/issue-14"
+        with patch.object(pilot, "refuse_active_work") as active:
+            self.assertEqual(self.run_cli(), 1)
+        self.assertIn("require the primary checkout on main", self.stderr.getvalue())
+        self.board_read.assert_not_called()
+        active.assert_not_called()
+
+    def test_invalid_continuous_options_fail_before_board_reads(self):
+        for args in (("--continuous", "--dry-run"), ("--continuous", "--expect-issue", "14"),
+                     ("--poll-seconds", "1"), ("--continuous", "--poll-seconds", "0"),
+                     ("--continuous", "--poll-seconds", "3601")):
+            with self.subTest(args=args), self.assertRaises(SystemExit) as failure:
+                self.run_cli(*args)
+            self.assertEqual(failure.exception.code, 2)
+        self.board_read.assert_not_called()
+        self.execute.assert_not_called()
 
     def test_status_read_requires_one_unambiguous_card(self):
         project = pilot.Project(7)

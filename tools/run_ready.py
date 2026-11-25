@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""On the trusted host, run at most one eligible Developer assignment."""
+"""On the trusted host, run one eligible assignment or opt in to continuous execution."""
 
 import argparse
 from contextlib import contextmanager
@@ -7,6 +7,7 @@ import fcntl
 import json
 from pathlib import Path
 import re
+import signal
 import sys
 import time
 
@@ -143,12 +144,26 @@ def run_one(args, project, recheck, execute):
     return 0
 
 
+def require_main(repo):
+    branch = runner.run_cmd(["git", "branch", "--show-current"], repo)
+    if branch != runner.BASE_BRANCH:
+        raise runner.Blocked(f"Live Ready runs require the primary checkout on {runner.BASE_BRANCH}; "
+                             f"found {branch or 'detached HEAD'}.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, help="explicit OpenAI model ID from OpenCode")
-    parser.add_argument("--dry-run", action="store_true", help="show the intended issue without writes or agents")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="show one read-only snapshot without agents")
+    mode.add_argument("--continuous", action="store_true", help="keep processing approved Ready work until stopped")
+    parser.add_argument("--poll-seconds", type=int, help="continuous idle interval in seconds (1–3600, default 60)")
     parser.add_argument("--expect-issue", type=int, help="refuse a different issue than the one you prepared")
     args = parser.parse_args(argv)
+    if args.continuous and args.expect_issue is not None:
+        parser.error("--expect-issue cannot be combined with --continuous; use it with a single assignment or preview")
+    if args.poll_seconds is not None and (not args.continuous or not 1 <= args.poll_seconds <= 3600):
+        parser.error("--poll-seconds requires --continuous and must be between 1 and 3600")
     try:
         project_number = board.configured_project()
     except ValueError as error:
@@ -157,38 +172,56 @@ def main(argv=None):
     def select_issues(numbers):
         return selector.select(numbers, board.ready_issue, board.gh_json)
 
+    def snapshot():
+        _, url, cards = board.project_issues(project_number)
+        result = select_issues(cards["Ready"])
+        issue = result.eligible[0] if result.eligible else None
+        if issue is not None and args.expect_issue is not None and args.expect_issue != issue:
+            raise runner.Blocked(f"Expected #{args.expect_issue}, but selector recommends #{issue}.")
+        if issue is not None:
+            print(f"Project: {url}", flush=True)
+        print("\n".join(result.lines), flush=True)
+        return issue
+
     try:
         model = runner.require_model(args.model)
         repo = Path.cwd()
         trees = runner.registered_worktrees(repo)
         if not trees or trees[0]["path"] != repo:
-            raise runner.Blocked("Run from the primary The-Producer repository root.")
+            checkout = " on main" if not args.dry_run else ""
+            raise runner.Blocked(f"Run from the primary The-Producer repository root{checkout}, not a linked worktree.")
         origin = runner.run_cmd(["git", "remote", "get-url", "origin"], repo)
         if not re.search(rf"github\.com[:/]{re.escape(board.REPOSITORY)}(?:\.git)?$", origin, re.I):
             raise runner.Blocked(f"Origin is not {board.REPOSITORY}.")
-        _, url, cards = board.project_issues(project_number)
-        result = select_issues(cards["Ready"])
-        if not result.eligible:
-            print("\n".join(result.lines))
-            return 0
-        issue = result.eligible[0]
-        if args.expect_issue is not None and args.expect_issue != issue:
-            raise runner.Blocked(f"Expected #{args.expect_issue}, but selector recommends #{issue}.")
-        print(f"Project: {url}", flush=True)
-        print("\n".join(result.lines), flush=True)
-        if args.dry_run:
-            print(f"DRY RUN: would claim #{issue} for model {model}. No writes or agent sessions.")
-            return 0
+        if not args.dry_run:
+            require_main(repo)
+        if not args.continuous:
+            issue = snapshot()
+            if args.dry_run or issue is None:
+                if issue is not None:
+                    print(f"DRY RUN: would claim #{issue} for model {model}. No writes or agent sessions.")
+                return 0
 
         run_home = repo.parent / f".{repo.name}-agent-runs"
         with pilot_lock(run_home):
             if not selector.owner_login(board.gh_json("GitHub pilot identity", "--method", "GET", "user")):
                 raise runner.Blocked(f"Status commands require gh authentication as {board.OWNER}.")
-            refuse_active_work(repo, run_home)
-            invocation = argparse.Namespace(repo=str(repo), issue=issue, model=model, approve_issue=True,
-                                            retry_blocked=False, dry_run=False, timeout_minutes=60)
-            return run_one(invocation, Project(project_number),
-                           lambda n: select_issues([n]), runner.orchestrate)
+            project = Project(project_number)
+            poll_seconds = args.poll_seconds or 60
+            while True:
+                require_main(repo)
+                refuse_active_work(repo, run_home)
+                if args.continuous:
+                    issue = snapshot()
+                    if issue is None:
+                        print(f"Idle: checking Ready again in {poll_seconds} seconds (Ctrl+C to stop).", flush=True)
+                        time.sleep(poll_seconds)
+                        continue
+                invocation = argparse.Namespace(repo=str(repo), issue=issue, model=model, approve_issue=True,
+                                                retry_blocked=False, dry_run=False, timeout_minutes=60)
+                code = run_one(invocation, project, lambda n: select_issues([n]), runner.orchestrate)
+                if code or not args.continuous:
+                    return code
     except (runner.Blocked, board.ReadError, selector.SelectionError, OSError) as error:
         print(f"run_ready: {error}", file=sys.stderr)
         return 1
@@ -201,5 +234,26 @@ def main(argv=None):
         return 130
 
 
+def cli():
+    # One interrupt unwinds the session. Repeated signals must not interrupt
+    # the child-group shutdown, artifact recording, or lock release.
+    stopped = False
+
+    def stop(_signum, _frame):
+        nonlocal stopped
+        if not stopped:
+            stopped = True
+            raise KeyboardInterrupt
+
+    handlers = {sig: signal.signal(sig, stop) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        return main()
+    except KeyboardInterrupt:
+        return 130
+    finally:
+        for sig, previous in handlers.items():
+            signal.signal(sig, previous)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli())

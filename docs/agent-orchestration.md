@@ -1,7 +1,7 @@
 # Lead-agent orchestration: implementation options and pilot contract
 
-**Status:** Option A implemented as a **supervised pilot** (`tools/orchestrate.py`); Python unit tests pass, but **no authenticated live OpenCode/GitHub run has been performed by this change**. Other options remain proposals. This does **not** authorize autonomous backlog execution, change permissions, or certify the entire workflow as production-ready.
-**Environment:** The Creative Director uses **OpenCode CLI 2.4.1** on Bazzite Linux, with ChatGPT-connected cloud models. Build is the validated interactive implementation agent; the Python subprocess runner's live tool permissions, provider authentication, and model resolution have **not** yet been inspected on that machine.
+**Status:** Option A is a **supervised pilot** (`tools/orchestrate.py`). Board-driven single assignments completed #30–32. Opt-in continuous execution (#111) needs separate live acceptance before closing #96. Other options remain proposals. This does **not** authorize autonomous backlog execution, change permissions, or certify the workflow as production-ready.
+**Environment:** The Creative Director runs OpenCode CLI on Bazzite Linux with ChatGPT-connected cloud models. Verify the installed version, effective permissions and account/model before launching a pilot.
 
 ## Objective and authority
 
@@ -121,7 +121,27 @@ python3 tools/run_ready.py --model openai/gpt-6.2-sol --expect-issue "$PILOT_ISS
 
 The host rechecks the selected issue's eligibility and actual Ready card before posting `/status In Progress`, then waits for the Project field to reflect it and verifies it again immediately before Build. Status reads have a bounded verification window, not a queue loop; GitHub comment/Actions updates are asynchronous and not atomic with the card read. The host stops on observed withdrawal, ambiguous status or API failure. Build does not post a duplicate status command. The non-draft PR event owns `In Review`; a missing transition stops the handoff instead of replaying status commands or treating a technically approved PR as ready for acceptance. Consult the status workflow's Actions logs and the current card if verification fails.
 
-Any correction Build requires a fresh `In Review` read immediately before launch. If the card is missing, has a different status, or cannot be verified, the host stops without launching the correction or writing another status. For handoff, the host re-reads the PR after verifying `In Review` and requires the same PR number and reviewed SHA. Success reports that verified head, technical verdict and logs, with human acceptance and merge still pending. A runner failure retains any PR, local state, transcripts and worktrees. For failures other than board verification, if the card is still `In Progress`, the host posts and verifies `/status Blocked`; otherwise it leaves the card alone (including `In Review` on a failed review) and reports the problem for owner triage. `In Review` by itself is not an approval. There is no retry, queue advance, merge or closure. Live end-to-end behavior must be verified on the trusted host; offline tests do not establish Actions delivery or OpenCode permissions.
+Any correction Build requires a fresh `In Review` read immediately before launch. If the card is missing, has a different status, or cannot be verified, the host stops without launching the correction or writing another status. For handoff, the host re-reads the PR after verifying `In Review` and requires the same PR number and reviewed SHA. Success reports that verified head, technical verdict and logs, with human acceptance and merge still pending. A runner failure retains any PR, local state, transcripts and worktrees. For failures other than board verification, if the card is still `In Progress`, the host posts and verifies `/status Blocked`; otherwise it leaves the card alone (including `In Review` on a failed review) and reports the problem for owner triage. `In Review` by itself is not an approval. A single-assignment run ends after this handoff; neither mode retries a failed assignment, merges or closes an issue.
+
+### Ready pilot: opt-in continuous execution
+
+From the primary checkout on `main`, with the existing `PROJECT_NUMBER`, preview the actual queue before authorizing a session:
+
+```sh
+python3 tools/run_ready.py --model openai/gpt-6.2-sol --dry-run
+python3 tools/run_ready.py --model openai/gpt-6.2-sol --continuous
+```
+
+Run the second command only if you intend to authorize **all** approved, eligible Ready assignments as they become available, not just the preview's recommendation. `--dry-run` takes one read-only snapshot and cannot be combined with `--continuous`. `--expect-issue` works for a single assignment or preview only. `--poll-seconds` is continuous-only (whole seconds, 1–3600; default 60).
+
+The session holds the same local lock across assignments and idle waits. It checks local run state and worktrees again, then refreshes the board after each verified handoff without waiting for merge to start independent work. An open PR or unresolved run still excludes a duplicate; dependent work waits for verified prerequisite acceptance, not technical approval. If nothing is eligible, it reports wait/skip reasons and polls without launching models or promoting Backlog. Each assignment uses the existing fresh `origin/main` fetch for its own worktree. Stop the session **before switching branches, pulling/updating the primary checkout, or running any manual orchestrate, review or cleanup command**. The lock only covers Ready invocations from this host; it does not coordinate with manual runners or other hosts.
+
+Ctrl+C or SIGTERM stops the session; an active OpenCode process group is stopped and its artifacts retained. A failed assignment (including usage limits or failed review), uncertain claim/handoff, observed withdrawal, API/authentication error or invalid local state stops the session. No automatic retry, model/payment fallback or resumption. Inspect the actual card, Actions logs, `state.json`, transcripts, worktrees and any PR before deciding what to do:
+
+- If there is a PR, preserve it. Resolve findings on that PR or use [review-only recovery](#re-review-an-existing-pr-without-re-running-development) if the owner reauthorizes review. Do not restart Build on a new assignment for the issue.
+- If the run is explicitly `blocked` with no PR, the owner must reauthorize that issue before manually using `--approve-issue --retry-blocked` with the [existing archive checks](#correct-worktree-startup-and-safe-retry-after-a-blocked-run). If local state is unfinished or unverifiable, a worktree is unsafe, or the card and artifacts disagree, stop for owner triage; do not delete or edit state to force a restart. Reconcile any stale card with the [status workflow procedure](project-status-automation.md) before returning to the pilot.
+
+Offline tests do not establish Actions delivery, permissions, or multiple real assignments. If only one approved real issue is available, record the live handoff and idle behavior separately from the offline multiple-assignment evidence.
 
 ### Explicit single-issue execution
 

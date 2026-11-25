@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import codecs
+from contextlib import contextmanager
 import datetime as dt
 import json
 import os
@@ -176,6 +177,34 @@ def agent_environment(cwd: Path) -> dict[str, str]:
     return env
 
 
+@contextmanager
+def defer_launch_interrupt():
+    """Don't unwind Popen before the new process group has a handle."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    pending = []
+
+    def defer(signum, frame):
+        if not pending:
+            pending.append((signum, frame))
+
+    handlers = {}
+    try:
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            handler = signal.getsignal(sig)
+            if callable(handler):
+                handlers[sig] = signal.signal(sig, defer)
+        yield
+    finally:
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+        if pending:
+            signum, frame = pending[0]
+            handlers[signum](signum, frame)
+
+
 def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
     """Run a fresh CLI session, stream its output, and bound its process group.
 
@@ -187,12 +216,6 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
     agent_name = argv[argv.index("--agent") + 1] if "--agent" in argv else argv[0]
     print(f"Starting {agent_name} in {cwd}. Transcript: {log_path}", flush=True)
     with log_path.open("wb") as log:
-        try:
-            process = subprocess.Popen(argv, cwd=cwd, env=agent_environment(cwd),
-                                       stdin=None, stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT, start_new_session=True)
-        except OSError as exc:
-            raise Blocked(f"Cannot start OpenCode: {exc}") from exc
         def stream() -> None:
             assert process.stdout is not None
             decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -208,11 +231,21 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
             remainder = decoder.decode(b"", final=True)
             if remainder:
                 print(remainder, end="", flush=True)
-        pump = threading.Thread(target=stream, daemon=True)
-        pump.start()
+        process = pump = None
         try:
+            with defer_launch_interrupt():
+                try:
+                    process = subprocess.Popen(argv, cwd=cwd, env=agent_environment(cwd),
+                                               stdin=None, stdout=subprocess.PIPE,
+                                               stderr=subprocess.STDOUT, start_new_session=True)
+                except OSError as exc:
+                    raise Blocked(f"Cannot start OpenCode: {exc}") from exc
+                pump = threading.Thread(target=stream, daemon=True)
+                pump.start()
             code = process.wait(timeout=timeout)
         except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+            if process is None:
+                raise
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -220,19 +253,20 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                process.wait()
-            pump.join(timeout=2)
-            if process.stdout is not None:
-                process.stdout.close()
+                pass
+            # The group may still contain descendants even if its leader exited.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
             raise Blocked("Agent stopped (timeout or interruption); check logs. "
                           "The worktree is preserved for inspection.") from exc
-        pump.join(timeout=2)
-        if process.stdout is not None:
-            process.stdout.close()
+        finally:
+            if pump is not None:
+                pump.join(timeout=2)
+            if process is not None and process.stdout is not None:
+                process.stdout.close()
     if code != 0:
         raise Blocked(f"OpenCode exited {code}; read {log_path} before retrying.")
     return log_path.read_text(encoding="utf-8", errors="replace")
@@ -634,8 +668,8 @@ def review_existing_pr(args: argparse.Namespace) -> int:
                           f"restart development. Inspect {state_dir / 'review-0.log'}")
         raise Blocked("Reviewer could not independently verify existing PR; "
                       f"inspect {state_dir / 'review-0.log'}")
-    except Blocked as exc:
-        write_state(state_file, phase="blocked", reason=str(exc))
+    except (Blocked, KeyboardInterrupt) as exc:
+        write_state(state_file, phase="blocked", reason=str(exc) or "Interrupted; inspect retained artifacts.")
         raise
     finally:
         try:
@@ -777,6 +811,8 @@ def orchestrate(args: argparse.Namespace, *, claim=None, verify_status=None) -> 
             except (Blocked, OSError) as exc:
                 print(f"CLEANUP WARNING: {exc}", file=sys.stderr)
                 write_state(state_file, cleanup_pending=[str(exc)])
+                if board_managed:
+                    raise
 
 
 def main(argv: list[str] | None = None) -> int:
