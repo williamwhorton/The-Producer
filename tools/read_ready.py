@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""Report The Producer's GitHub Project Ready column without changing it."""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+OWNER = "williamwhorton"
+REPOSITORY = f"{OWNER}/The-Producer"
+API_VERSION = "2026-03-10"
+UNAVAILABLE = "(unavailable)"
+MISSING = "(not set)"
+
+# See GitHub's GraphQL Projects reference and the gh api pagination manual.
+PROJECT_QUERY = """
+query ($owner: String!, $number: Int!, $endCursor: String) {
+  user(login: $owner) {
+    projectV2(number: $number) {
+      title url
+      field(name: "Status") {
+        ... on ProjectV2SingleSelectField { options { id name } }
+      }
+      items(first: 100, after: $endCursor, archivedStates: [NOT_ARCHIVED]) {
+        nodes {
+          type
+          fieldValueByName(name: "Status") {
+            ... on ProjectV2ItemFieldSingleSelectValue { optionId }
+          }
+          content {
+            ... on Issue { number repository { nameWithOwner } }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
+"""
+
+
+class ReadError(Exception):
+    pass
+
+
+def gh_json(context, *args):
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--hostname", "github.com", *args],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+    except OSError as error:
+        raise ReadError(f"{context}: could not run GitHub CLI ({type(error).__name__})") from error
+    except subprocess.TimeoutExpired as error:
+        raise ReadError(f"{context}: GitHub CLI request timed out") from error
+    if result.returncode:
+        # Report only the status, never raw CLI output (which may contain debug data).
+        match = re.search(r"\(HTTP ([1-5][0-9]{2})\)", result.stderr)
+        status = match[1] if match else None
+        if result.returncode == 4 or status == "401":
+            raise ReadError(f"{context}: GitHub authentication failed; check gh auth status")
+        detail = f"HTTP {status}" if status else f"gh exit {result.returncode}"
+        raise ReadError(f"{context}: GitHub API/CLI error ({detail}); check access and configuration")
+    try:
+        return json.loads(result.stdout)
+    except ValueError as error:
+        raise ReadError(f"{context}: GitHub returned invalid JSON") from error
+
+
+def ready_project(number):
+    pages = gh_json(
+        f"Project #{number}", "graphql", "--paginate", "--slurp", "-f",
+        f"query={PROJECT_QUERY}", "-f", f"owner={OWNER}", "-F", f"number={number}",
+    )
+    if not isinstance(pages, list) or not pages:
+        raise ReadError("GitHub returned no Project pages")
+    numbers = []
+    for index, page in enumerate(pages):
+        if page.get("errors"):
+            raise ReadError(f"Project #{number}: GitHub GraphQL API error; check project access")
+        project = (page["data"]["user"] or {}).get("projectV2")
+        if not project:
+            raise ReadError(f"Project #{number} not found for {OWNER}; check PROJECT_NUMBER and access")
+        options = (project["field"] or {}).get("options", [])
+        ready = [option["id"] for option in options if option["name"] == "Ready"]
+        if len(ready) != 1:
+            raise ReadError(f"Project #{number}: expected one Ready option in the Status field")
+        items = project["items"]
+        if items["pageInfo"]["hasNextPage"] is not (index < len(pages) - 1):
+            raise ReadError(f"Project #{number}: incomplete or inconsistent item pagination")
+        for item in items["nodes"]:
+            status = (item["fieldValueByName"] or {}).get("optionId")
+            if item["type"] == "REDACTED" and status in (None, ready[0]):
+                raise ReadError(f"Project #{number}: an inaccessible item may be a Ready issue")
+            if item["type"] != "ISSUE" or status != ready[0]:
+                continue
+            issue = item["content"]
+            if not issue:
+                raise ReadError(f"Project #{number}: Ready issue content is unavailable")
+            if issue["repository"]["nameWithOwner"].casefold() == REPOSITORY.casefold():
+                numbers.append(issue["number"])
+    return project["title"], project["url"], numbers
+
+
+def issue_data(number, suffix="", *, paginate=False):
+    endpoint = f"repos/{REPOSITORY}/issues/{number}{suffix}"
+    paging = ["--paginate", "--slurp"] if paginate else []
+    data = gh_json(
+        f"#{number}{suffix}", "--method", "GET", "-H", f"X-GitHub-Api-Version: {API_VERSION}",
+        "-H", "Accept: application/vnd.github+json",
+        *paging, endpoint + ("?per_page=100" if paginate else ""),
+    )
+    if not paginate:
+        return data
+    if not isinstance(data, list) or not data or not all(isinstance(page, list) for page in data):
+        raise ReadError(f"#{number}{suffix}: expected paginated GitHub REST lists")
+    return [row for page in data for row in page]
+
+
+def issue_lines(number):
+    issue = issue_data(number)
+    fields = {field.get("issue_field_name"): field
+              for field in issue_data(number, "/issue-field-values", paginate=True)}
+
+    def option(name):
+        if name not in fields:
+            return UNAVAILABLE if None in fields else MISSING
+        return (fields[name].get("single_select_option") or {}).get("name") or UNAVAILABLE
+
+    blockers = issue_data(number, "/dependencies/blocked_by", paginate=True)
+    labels = issue.get("labels")
+    assigned = issue.get("assignees")
+    developer = UNAVAILABLE if labels is None else (
+        "yes" if any(
+            (label if isinstance(label, str) else label["name"]) == "agent:developer"
+            for label in labels
+        ) else "no"
+    )
+    assignees = UNAVAILABLE if assigned is None else (
+        ", ".join(f"@{user['login']}" for user in assigned if user.get("type") != "Bot") or "(none)"
+    )
+    issue_type = UNAVAILABLE if "type" not in issue else (
+        (issue["type"] or {}).get("name") or MISSING
+    )
+    lines = [
+        f"#{number} {json.dumps(issue['title'], ensure_ascii=False)}",
+        f"  agent:developer: {developer}; human assignees: {assignees}",
+        f"  Type: {issue_type}; Priority: {option('Priority')}; Workstream: {option('Workstream')}",
+        "  Blocked by:" if blockers else "  Blocked by: (none)",
+    ]
+    for blocker in blockers:
+        reason = UNAVAILABLE if "state_reason" not in blocker else blocker["state_reason"] or MISSING
+        url = f" — {blocker['html_url']}" if blocker.get("html_url") else ""
+        lines.append(f"    #{blocker['number']}: {blocker.get('state') or UNAVAILABLE}; reason: {reason}{url}")
+    return lines
+
+
+def main():
+    argparse.ArgumentParser(
+        description=__doc__ + " Set PROJECT_NUMBER to the configured project number."
+    ).parse_args()
+    number = os.environ.get("PROJECT_NUMBER", "").strip()
+    if not re.fullmatch(r"[0-9]{1,10}", number) or not 0 < int(number) < 2**31:
+        print("Configuration error: set PROJECT_NUMBER to a positive GitHub Project number.", file=sys.stderr)
+        return 2
+    try:
+        title, url, numbers = ready_project(int(number))
+        # Do not print a successful-looking partial report if a later read fails.
+        lines = [line for issue in numbers for line in issue_lines(issue)]
+    except ReadError as error:
+        print(f"read_ready: {error}", file=sys.stderr)
+        return 1
+    except (AttributeError, KeyError, TypeError):
+        print("read_ready: unexpected GitHub API response shape", file=sys.stderr)
+        return 1
+    print(f"{json.dumps(title, ensure_ascii=False)} ({url}) — Ready issues for {REPOSITORY}")
+    print("\n".join(lines) if lines else "No Ready issues for this repository.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
