@@ -8,6 +8,11 @@ import re
 import subprocess
 import sys
 
+if __package__:
+    from .ready_selection import SelectionError, selection_lines
+else:
+    from ready_selection import SelectionError, selection_lines
+
 OWNER = "williamwhorton"
 REPOSITORY = f"{OWNER}/The-Producer"
 API_VERSION = "2026-03-10"
@@ -45,7 +50,7 @@ class ReadError(Exception):
     pass
 
 
-def gh_json(context, *args):
+def gh_json(context, *args, missing_issue_ok=False):
     try:
         result = subprocess.run(
             ["gh", "api", "--hostname", "github.com", *args],
@@ -61,6 +66,19 @@ def gh_json(context, *args):
         status = match[1] if match else None
         if result.returncode == 4 or status == "401":
             raise ReadError(f"{context}: GitHub authentication failed; check gh auth status")
+        if missing_issue_ok and status is None:
+            # GraphQL may return partial data and a typed NOT_FOUND for this
+            # one prerequisite. Do not downgrade repo, auth, or query errors.
+            try:
+                page = json.loads(result.stdout)
+                errors = page.get("errors")
+                repo = page["data"]["repository"]
+                if (repo["issue"] is None and errors and all(
+                        e.get("type") == "NOT_FOUND" and e.get("path") == ["repository", "issue"]
+                        for e in errors)):
+                    return {"data": page["data"]}
+            except (ValueError, AttributeError, KeyError, TypeError):
+                pass
         detail = f"HTTP {status}" if status else f"gh exit {result.returncode}"
         raise ReadError(f"{context}: GitHub API/CLI error ({detail}); check access and configuration")
     try:
@@ -119,17 +137,23 @@ def issue_data(number, suffix="", *, paginate=False):
     return [row for page in data for row in page]
 
 
-def issue_lines(number):
+def ready_issue(number):
     issue = issue_data(number)
+    fields = issue_data(number, "/issue-field-values", paginate=True)
+    blockers = issue_data(number, "/dependencies/blocked_by", paginate=True)
+    return issue, fields, blockers
+
+
+def issue_lines(number):
+    issue, values, blockers = ready_issue(number)
     fields = {field.get("issue_field_name"): field
-              for field in issue_data(number, "/issue-field-values", paginate=True)}
+              for field in values}
 
     def option(name):
         if name not in fields:
             return UNAVAILABLE if None in fields else MISSING
         return (fields[name].get("single_select_option") or {}).get("name") or UNAVAILABLE
 
-    blockers = issue_data(number, "/dependencies/blocked_by", paginate=True)
     labels = issue.get("labels")
     assigned = issue.get("assignees")
     developer = UNAVAILABLE if labels is None else (
@@ -158,9 +182,12 @@ def issue_lines(number):
 
 
 def main():
-    argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=__doc__ + " Set PROJECT_NUMBER to the configured project number."
-    ).parse_args()
+    )
+    parser.add_argument("--select", action="store_true",
+                        help="rank eligible Developer issues without starting work")
+    args = parser.parse_args()
     number = os.environ.get("PROJECT_NUMBER", "").strip()
     if not re.fullmatch(r"[0-9]{1,10}", number) or not 0 < int(number) < 2**31:
         print("Configuration error: set PROJECT_NUMBER to a positive GitHub Project number.", file=sys.stderr)
@@ -168,8 +195,11 @@ def main():
     try:
         title, url, numbers = ready_project(int(number))
         # Do not print a successful-looking partial report if a later read fails.
-        lines = [line for issue in numbers for line in issue_lines(issue)]
-    except ReadError as error:
+        if args.select:
+            lines = selection_lines(numbers, ready_issue, gh_json)
+        else:
+            lines = [line for issue in numbers for line in issue_lines(issue)]
+    except (ReadError, SelectionError) as error:
         print(f"read_ready: {error}", file=sys.stderr)
         return 1
     except (AttributeError, KeyError, TypeError):

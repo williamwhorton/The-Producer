@@ -85,6 +85,25 @@ The fix has **automated regression tests** for a stale parent `PWD`, wrong workt
 
 ## Supervised runner: commands and guardrails
 
+### Read-only Ready selection
+
+From a checkout of this repository on the trusted host, with the existing `gh` login and configured `PROJECT_NUMBER`, run `python3 tools/read_ready.py` for the original Ready diagnostic or `python3 tools/read_ready.py --select` for the selection report. Use the runner's normal primary checkout and local run location for a complete duplicate-work check; a linked worktree uses that same checkout's run directory. The report is a snapshot, not a claim or permission to dispatch, and performs no writes.
+
+The Lead should only place a bounded, approved Developer deliverable in Ready with `agent:developer`, no human assignees, a native Feature/Bug/Task/Spike Type, native Priority and Workstream, and native **Human Approval Required** set to **No** (no further approval outstanding). Keep unsettled scope and known unresolved prior work out of selection. No status-comment history or issue-body copies of native fields are used.
+
+Before making an issue selectable, the Lead verifies the approved implementation scope and reconciles all prerequisites in the body to native **Blocked by** links. Remove obsolete or unreconciled prerequisite instructions, then put exactly one of these plain standalone declarations on the first nonempty line of the issue body, before the scope:
+
+- `Selection-ready implementation; prerequisites: none` — reviewed, with no prerequisites.
+- `Selection-ready implementation; prerequisites: native` — reviewed, with all prerequisites represented by native links.
+
+The line must match exactly: no indentation, quoting, or surrounding Markdown. Leading blank lines are fine; a declaration later in the body, including in a fenced example, does not count. This is a triage declaration, not a second dependency graph or a grant of new approval. Remove or update it if scope or prerequisites change. The selector checks the declaration against the visible links and GitHub's total and skips an absent or inconsistent declaration/count. It does not interpret links, references or headings in arbitrary prose.
+
+A prerequisite must be closed as **Completed**. For code work, the latest closure must directly identify a PR merged into this repo's `main` by `williamwhorton`. For known non-code work only, an owner-authored (and not last edited by someone else) issue may use the exact standalone declaration `Selection completion: non-code` under the same first-nonempty-line rule; its latest manual **Completed** closure must be by the owner. Wait on open, inaccessible, external, not-planned or otherwise unverified prerequisites; the Lead handles exceptions instead of replaying history.
+
+Drafts and other open implementation PRs found by GitHub closing link or `agent/issue-N` head, and retained local runner directories or registered issue worktrees, exclude the assignment. The selector checks native links from the PR and issue sides, including links to PRs targeting another repository. It does not interpret PR body text as a link. Archived retry logs are retained and are not active runs. The diagnostic does not search or repair abandoned history; the Lead must resolve any known ambiguity before declaring the assignment ready. Eligible issues are ranked first by how many unique, otherwise-valid Ready issues would have **no other** unsatisfied direct prerequisite after their acceptance, then by native Priority, then by ascending issue number. Successors still wait until acceptance. API/auth errors exit nonzero instead of reporting an empty queue.
+
+### Explicit single-issue execution
+
 The initial runner is standard-library Python 3 (no pip dependencies). From the main checkout **after this PR merges**:
 
 ```sh
