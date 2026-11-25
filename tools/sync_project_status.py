@@ -261,7 +261,14 @@ class Project:
                 "field": self.field, "option": self.options[status],
             }
         )
-        print(f"#{number}: {current or '(none)'} -> {status}")
+        observed_item, observed_status, _ = self.find_item(number)
+        if observed_item != item or observed_status != status:
+            raise SyncError(
+                f"#{number}: could not verify {status} on the updated Project card "
+                f"(read {observed_status or '(none)'}"
+                f"{' on a different or missing card' if observed_item != item else ''})"
+            )
+        print(f"#{number}: {current or '(none)'} -> {status} (verified)")
 
 
 def main():

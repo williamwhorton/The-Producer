@@ -22,10 +22,11 @@ permissions:
   issues: read
   pull-requests: read
 
-# Avoid conflicting updates from simultaneous PR, issue, and comment events.
+# Keep one writer without replacing pending runs during a burst of events.
 concurrency:
   group: project-status-sync
   cancel-in-progress: false
+  queue: max
 
 jobs:
   sync:
