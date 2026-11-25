@@ -1,8 +1,9 @@
 # Simulation boundary
 
-This module owns simulation timing, event ordering and house routing. It runs
-without a scene tree, renderer, HUD, or persistence. The house preview uses a
-projection of the static floor plan; it does not run the scheduler.
+This module owns simulation timing, event ordering, house routing, and prototype
+contestant autonomy. It runs without a scene tree, renderer, HUD, or persistence.
+The house preview uses a projection of the static floor plan; it does not run
+the scheduler or contestants.
 
 ## House layout and routing (#29)
 
@@ -22,8 +23,8 @@ destination, and reaching the threshold does not decide whether someone leaves.
 
 No floor changes are authored. The [#4 comparison fixture](https://github.com/williamwhorton/The-Producer/issues/4)
 is disposable and only approved a stair *marker*, not character stair routing.
-Other floors are therefore invalid. There is no runtime actor, door lock,
-collision avoidance, or season-content pipeline in this slice.
+Other floors are therefore invalid. The route model does not implement door
+locks or actor collision avoidance.
 
 ```sh
 godot --headless --path game --script res://tests/house_navigation.gd
@@ -71,6 +72,35 @@ durations. A different seed changes actual results, not just metadata.
 Same-version determinism is tested; cross-version determinism and save/load are
 not claimed.
 
-No new gameplay is wired into the preview. Contestant behavior, dialogue,
-curfew/staging, actual device rules, player controls and live observation
-remain separate work.
+## Prototype contestant autonomy (#31)
+
+`contestant_runtime.gd` consumes the validated cast from `ScenarioLoader` (#30)
+without changing its IDs or starting cells. It schedules decisions in authored
+cast order on the #28 clock and follows #29 routes one cell per tick. In the
+absence of a cue, actors alternate between resting in the parlor and reading
+in the study. These activity spots and the decision cadence are placeholders,
+not final needs, timing, or content.
+
+A simulation-only disturbance input names a walkable cell, not an actor, goal,
+or chosen reaction. Each actor considers the latest cue once, at the next
+decision point after its current route. Private placeholder motives favor
+either investigating a nearby lead or avoiding the cue by taking refuge in the
+other room. If the cue blocks the only path to refuge, the avoider waits for
+that reaction instead of crossing it. From #5, circumstances and motives
+determine the response, and the scheduler seed only breaks ties between equally
+near investigation leads. After the reaction, ordinary activity resumes.
+
+The runtime is exercised headlessly and is **not connected to the preview**.
+There are no player commands or actor data in the preview, and `--show-navigation`
+still draws the same static route, not a contestant's route. Any future live
+display must use a source-mediated projection under ADR-0004, not the runtime
+records inspected by the tests. The prototype adds no final psychology,
+social simulation, device rules, or departures.
+
+From the repository root:
+
+```sh
+godot --headless --path game --script res://tests/contestant_runtime.gd
+```
+
+Expect `PASS: authored contestant autonomy, seeded choices, legal movement, and preview isolation`.
