@@ -5,9 +5,9 @@ from pathlib import Path
 import re
 
 if __package__:
-    from .orchestrate import BASE_BRANCH, REPOSITORY, Blocked, closes_issue, registered_worktrees, run_cmd
+    from .orchestrate import BASE_BRANCH, REPOSITORY, Blocked, registered_worktrees, run_cmd
 else:
-    from orchestrate import BASE_BRANCH, REPOSITORY, Blocked, closes_issue, registered_worktrees, run_cmd
+    from orchestrate import BASE_BRANCH, REPOSITORY, Blocked, registered_worktrees, run_cmd
 
 OWNER, REPO = REPOSITORY.split("/")
 PRIORITIES = ("Urgent", "High", "Medium", "Low")
@@ -18,13 +18,25 @@ query ($owner: String!, $repo: String!, $endCursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequests(states: [OPEN], first: 30, after: $endCursor) {
       nodes {
-        number headRefName body isDraft
+        number headRefName isDraft
         closingIssuesReferences(first: 100) {
           nodes { number repository { nameWithOwner } }
           pageInfo { hasNextPage }
         }
       }
       pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+"""
+
+ISSUE_PRS = """
+query ($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      closedByPullRequestsReferences(first: 1, includeClosedPrs: false) {
+        nodes { url isDraft }
+      }
     }
   }
 }
@@ -87,6 +99,22 @@ def open_prs(read):
             result.append((pr, {issue["number"] for issue in refs["nodes"]
                                 if issue["repository"]["nameWithOwner"].casefold() == REPOSITORY.casefold()}))
     return sorted(result, key=lambda entry: entry[0]["number"])
+
+
+def issue_pr_exclusion(read, number):
+    # One open link is enough to exclude a candidate, including links made
+    # from the issue sidebar to PRs targeting another repository.
+    context = f"Linked pull requests for #{number}"
+    issue = repository_result(repository_query(read, context, ISSUE_PRS, "-F", f"number={number}"),
+                              context)["issue"]
+    refs = issue["closedByPullRequestsReferences"] if issue else None
+    if refs is None or refs["nodes"] is None:
+        raise SelectionError(f"{context}: closing issue links could not be verified")
+    if refs["nodes"]:
+        pr = refs["nodes"][0]
+        draft = "draft " if pr["isDraft"] else ""
+        return f"existing open {draft}PR {pr['url']}; Lead triage"
+    return None
 
 
 def branch_issue(branch):
@@ -244,14 +272,18 @@ def selection_lines(numbers, read_issue, read):
         prs, local, closures = open_prs(read), local_work(), {}
         for number, (_, blockers) in candidates.items():
             for pr, links in prs:
-                if number in links or branch_issue(pr["headRefName"]) == number or closes_issue(pr["body"], number):
+                if number in links or branch_issue(pr["headRefName"]) == number:
                     draft = "draft " if pr["isDraft"] else ""
                     skipped[number] = f"existing open {draft}PR #{pr['number']}; Lead triage"
                     break
             if number not in skipped and number in local:
                 skipped[number] = local[number]
             if number not in skipped:
-                waits[number] = dependency_waits(blockers, read, closures)
+                reason = issue_pr_exclusion(read, number)
+                if reason:
+                    skipped[number] = reason
+                else:
+                    waits[number] = dependency_waits(blockers, read, closures)
 
     # Only count unique direct successors that would have no other unsatisfied
     # prerequisite. A waiting successor never becomes eligible in this run.
