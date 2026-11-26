@@ -94,8 +94,8 @@ The runtime is exercised headlessly and is **not connected to the preview**.
 There are no player commands or actor data in the preview, and `--show-navigation`
 still draws the same static route, not a contestant's route. Any future live
 display must use a source-mediated projection under ADR-0004, not the runtime
-records inspected by the tests. The prototype adds no final psychology,
-social simulation, device rules, or departures.
+records inspected by the tests. The autonomy slice adds no final psychology,
+device rules, or departures.
 
 From the repository root:
 
@@ -126,7 +126,7 @@ still govern decisions, including opposite reactions at identical fear.
 The integer values, history cap and immediate relief are implementation/test
 placeholders, not final mechanics or balance. This slice does not model passive
 recovery, residual stress, cue habituation, personality thresholds, sensory
-range or communication delivery. There is no dialogue, producer intervention,
+range. There is no dialogue text, producer intervention,
 entity or departure behavior. There are no new public observations: the preview
 still consumes only the detached static plan and optional example route.
 
@@ -135,3 +135,33 @@ godot --headless --path game --script res://tests/contestant_perception.gd
 ```
 
 Expect `PASS: private witness memory, separate appraisals, autonomous decisions, and no preview leakage`.
+
+## Selective evidence sharing (#33)
+
+`consider_sharing_evidence()` resolves one simulation-only contact opportunity
+between two contestants for one cue category and evidence cell. The provisional
+rule is directional: a speaker shares retained, first-hand anomalous or staging
+evidence with a trusted contact; otherwise they withhold it. The constructor
+accepts optional private fixture data mapping each speaker ID to an array of
+trusted IDs, empty by default. This is not a player command, a final
+relationship model, or an automatic conversation scheduler.
+
+Only the listener gains a new memory, marked with the speaker's ID
+(`reported_by`) and the receipt tick. This supports the relevant private theory
+with the existing provisional appraisal, but is not a direct sighting, a
+verified cause, or an order to react. It cannot be relayed as first-hand
+evidence. The fixture exercises sharing in both directions, withholding, and
+an uninvolved third contestant who learns nothing.
+
+The test contact is explicitly **synthetic and has no producer source**. The
+evidence cell is not the conversation venue. No text is generated and there is
+no public conversation feed or archive. This does not designate a blind spot in
+the house: under ADR-0004/0005, future in-house speech must go through authorized
+surveillance and only speech actually attended live may enter readable history.
+The preview still consumes only the static plan and optional example route.
+
+```sh
+godot --headless --path game --script res://tests/contestant_sharing.gd
+```
+
+Expect `PASS: selective evidence sharing, attributed memory, recipient isolation, and no public report`.
