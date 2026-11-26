@@ -25,12 +25,14 @@ var _clock: Scheduler
 var _actors: Dictionary[StringName, Dictionary] = {}
 
 
-func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: Dictionary) -> void:
+func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: Dictionary,
+		trusted_contacts: Dictionary = {}) -> void:
 	_clock = clock
 	for id: StringName in cast:
 		_actors[id] = {
 			"cell": cast[id].start_cell,
 			"motive": motives.get(id, Motive.KEEP_DISTANCE),
+			"trusted_contacts": trusted_contacts.get(id, []).duplicate(),
 			"pending_cue": null,
 			"rest_next": cast[id].room_id == &"parlor",
 			"activity": &"",
@@ -65,11 +67,33 @@ func perceive_event(cell: Vector3i, cue: Cue, witnesses: Array[StringName]) -> b
 	return true
 
 
-func _remember(actor: Dictionary, cell: Vector3i, cue: Cue) -> void:
+# A trusted simulation caller supplies a two-person contact opportunity, not an
+# order to speak. This resolves private knowledge only, not surveillance access.
+func consider_sharing_evidence(speaker_id: StringName, listener_id: StringName,
+		cell: Vector3i, cue: Cue) -> bool:
+	if speaker_id == listener_id or not _actors.has(speaker_id) or not _actors.has(listener_id):
+		return false
+	if cue != Cue.ANOMALOUS_EVIDENCE and cue != Cue.STAGING_EVIDENCE:
+		return false
+	var speaker: Dictionary = _actors[speaker_id]
+	if listener_id not in speaker.trusted_contacts:
+		return false
+	for entry: Dictionary in speaker.memory:
+		# This slice allows sharing retained first-hand evidence, not relaying hearsay.
+		if entry.cell == cell and entry.cue == cue and not entry.has("reported_by"):
+			_remember(_actors[listener_id], cell, cue, speaker_id)
+			return true
+	return false
+
+
+func _remember(actor: Dictionary, cell: Vector3i, cue: Cue, reported_by: StringName = &"") -> void:
 	var memory: Array = actor.memory
 	if memory.size() == _MEMORY_LIMIT:
 		memory.pop_front()
-	memory.append({"tick": _clock.current_tick(), "cell": cell, "cue": cue})
+	var entry := {"tick": _clock.current_tick(), "cell": cell, "cue": cue}
+	if reported_by != &"":
+		entry["reported_by"] = reported_by
+	memory.append(entry)
 	match cue:
 		Cue.STARTLE:
 			var spike := _LOADED_STARTLE if actor.stress > _NATURAL_BASELINE else _UNLOADED_STARTLE
