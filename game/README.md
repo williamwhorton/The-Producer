@@ -77,7 +77,8 @@ is not used at startup or offered as another playable property.
 The preview uses local Godot scenes/scripts only: a headless boot path (T-01
 foundation, not a deterministic simulation), separated modules (T-03), no
 runtime network or paid API dependency (T-04), and a 3D dollhouse view (G-03).
-No departure rules, actor control, or floor transitions are implemented.
+The preview does not run actors or departures. The simulation's headless
+[voluntary departure fixture](simulation/README.md#voluntary-departure-34) is separate.
 
 ## Smoke checks
 
