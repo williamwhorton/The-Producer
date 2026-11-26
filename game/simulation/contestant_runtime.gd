@@ -20,18 +20,25 @@ const _EVIDENCE_SUPPORT := 1
 const _PRESSURE_BASELINE := 1
 const _UNLOADED_STARTLE := 2
 const _LOADED_STARTLE := 3
+const _DEFAULT_STAY_MOTIVATION := 3
+const _DISTRUST_WEIGHT := 2
 
 var _clock: Scheduler
+var _exit_id: StringName
 var _actors: Dictionary[StringName, Dictionary] = {}
+var _departed: Dictionary[StringName, Dictionary] = {}
 
 
 func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: Dictionary,
-		trusted_contacts: Dictionary = {}) -> void:
+		trusted_contacts: Dictionary = {}, stay_motivations: Dictionary = {},
+		exit_id: StringName = &"front") -> void:
 	_clock = clock
+	_exit_id = exit_id
 	for id: StringName in cast:
 		_actors[id] = {
 			"cell": cast[id].start_cell,
 			"motive": motives.get(id, Motive.KEEP_DISTANCE),
+			"stay_motivation": stay_motivations.get(id, _DEFAULT_STAY_MOTIVATION),
 			"trusted_contacts": trusted_contacts.get(id, []).duplicate(),
 			"pending_cue": null,
 			"rest_next": cast[id].room_id == &"parlor",
@@ -47,7 +54,7 @@ func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: 
 	_clock.schedule_autonomous(_clock.current_tick() + 1, _step)
 
 
-# The #31 shared fixture explicitly assumes the whole cast perceived this cue.
+# The #31 shared fixture explicitly assumes everyone still inside perceived this cue.
 func present_disturbance(cell: Vector3i) -> bool:
 	return perceive_event(cell, Cue.STARTLE, _actors.keys())
 
@@ -113,18 +120,36 @@ func _remember(actor: Dictionary, cell: Vector3i, cue: Cue, reported_by: StringN
 
 
 func _step() -> void:
-	# Authored cast order is stable, including when two actors draw on the same tick.
-	for actor: Dictionary in _actors.values():
+	# Snapshot the active IDs in cast order so arrivals can remove actors safely.
+	for id: StringName in _actors.keys():
+		var actor: Dictionary = _actors[id]
 		var route: Array[Vector3i] = actor.route
 		if not route.is_empty():
 			actor.cell = route.pop_front()
 		else:
 			_choose(actor)
+		if actor.activity == &"leave" and actor.route.is_empty():
+			actor["departure"] = {
+				"kind": &"voluntary_departure",
+				"tick": _clock.current_tick(),
+				"exit_id": _exit_id,
+			}
+			_departed[id] = actor
+			_actors.erase(id)
 	_clock.schedule_autonomous(_clock.current_tick() + 1, _step)
 
 
 func _choose(actor: Dictionary) -> void:
 	var start: Vector3i = actor.cell
+	# Distrust can outweigh the reason to stay. Chronic pressure can tip a
+	# close choice, but a startle alone still only prompts a cue reaction.
+	var leave_pressure: int = actor.staging_suspicion * _DISTRUST_WEIGHT + actor.stress
+	if actor.staging_suspicion > 0 and leave_pressure > actor.stay_motivation:
+		var exit_route := House.route_to_exit(start, _exit_id)
+		if not exit_route.is_empty():
+			_begin(actor, &"leave", exit_route)
+			return
+
 	if actor.pending_cue != null:
 		var cue: Vector3i = actor.pending_cue
 		actor.pending_cue = null

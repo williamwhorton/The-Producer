@@ -94,8 +94,7 @@ The runtime is exercised headlessly and is **not connected to the preview**.
 There are no player commands or actor data in the preview, and `--show-navigation`
 still draws the same static route, not a contestant's route. Any future live
 display must use a source-mediated projection under ADR-0004, not the runtime
-records inspected by the tests. The autonomy slice adds no final psychology,
-device rules, or departures.
+records inspected by the tests.
 
 From the repository root:
 
@@ -111,8 +110,8 @@ Expect `PASS: authored contestant autonomy, seeded choices, legal movement, and 
 the IDs of the contestants who actually witnessed it. The simulation or test
 fixture supplies this list; being in the cast or visible to a producer camera
 does not imply witnessing an event. An empty list changes nothing and an unknown
-ID rejects the delivery. The original `present_disturbance()` remains the #31
-shared fixture: it explicitly assumes all contestants perceived the same startle.
+or departed ID rejects the delivery. The original `present_disturbance()` remains
+the #31 shared fixture: it assumes all active contestants perceived the same startle.
 
 Each witness keeps a private bounded history of the cue, cell and simulation
 tick. Fear, stress, belief in a haunting, and suspicion of deliberate staging
@@ -125,10 +124,8 @@ still govern decisions, including opposite reactions at identical fear.
 
 The integer values, history cap and immediate relief are implementation/test
 placeholders, not final mechanics or balance. This slice does not model passive
-recovery, residual stress, cue habituation, personality thresholds, sensory
-range. There is no dialogue text, producer intervention,
-entity or departure behavior. There are no new public observations: the preview
-still consumes only the detached static plan and optional example route.
+recovery, residual stress, cue habituation, or sensory range. The preview still
+consumes only the detached static plan and optional example route.
 
 ```sh
 godot --headless --path game --script res://tests/contestant_perception.gd
@@ -165,3 +162,37 @@ godot --headless --path game --script res://tests/contestant_sharing.gd
 ```
 
 Expect `PASS: selective evidence sharing, attributed memory, recipient isolation, and no public report`.
+
+## Voluntary departure (#34)
+
+At a decision point, when no route is in progress, a contestant weighs their
+private reason to stay against evidence of staging and existing chronic stress.
+The prototype follows #5's distrust example: fear alone never triggers quitting,
+and a motivated contestant can stay despite fear and suspicion. The headless
+fixture assigns `test_a` a weak reason to stay (weight 1) and `test_b` a strong
+reason (weight 3, also the default). When staging suspicion is present, the
+contestant tries to leave if twice that suspicion plus stress exceeds the stay
+weight; a tie favors staying. These are provisional fixture values and criteria,
+not final character motives or balance.
+
+The runtime takes the named exit from the simulation caller (the fixture uses
+the authored scenario's `required_exit_id`, `front`). If a route exists, leaving
+uses the usual one-cell-per-tick movement and ends at the interior threshold.
+The contestant is still an active occupant and can perceive events and share
+evidence along the way. If already at the threshold, the choice can complete
+that tick. With no valid route the contestant can still choose another activity.
+
+On arrival, the runtime moves the contestant record from active occupancy to a
+private archive under the same ID, preserving their memory and recording one
+`voluntary_departure` with the exit ID and completion tick. The archived
+contestant no longer receives perceptions, shares evidence, moves, or makes
+decisions. This is an ordinary exit; no outside location, other fate, or season
+resolution is simulated. The static preview exposes no departure record, intent,
+or private state. Any future visible departure requires authorized evidence
+under ADR-0004/0005.
+
+```sh
+godot --headless --path game --script res://tests/contestant_departure.gd
+```
+
+Expect `PASS: autonomous voluntary departure, legal exit travel, and active-cast isolation`.
