@@ -2,6 +2,7 @@ import argparse
 import io
 import json
 import os
+import select
 import signal
 import subprocess
 import sys
@@ -568,6 +569,72 @@ class PilotTests(unittest.TestCase):
 
     def test_transcript_drain_expiry_stops_group_and_session(self):
         self.run_with_descendant_holding_transcript(interrupt=False)
+
+    def test_first_sigterm_during_timeout_grace_kills_and_reaps_before_exit(self):
+        self.repo.mkdir()
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress"]
+        orchestrate = pilot.runner.orchestrate
+        popen, wait, killpg = subprocess.Popen, subprocess.Popen.wait, os.killpg
+        children = []
+        script = ("import signal\n"
+                  "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                  "print('stand-in ignoring SIGTERM', flush=True)\n"
+                  "while True: signal.pause()\n")
+
+        def spawn(_argv, **kwargs):
+            child = popen([sys.executable, "-c", script], **kwargs)
+            children.append(child)
+            # Wait for SIG_IGN to be installed before the runner starts timing out.
+            self.assertTrue(select.select([child.stdout], [], [], 5)[0])
+            return child
+
+        def wait_with_stop(child, timeout=None):
+            if timeout == 5:  # The first stop arrives inside the shutdown grace wait.
+                signal.raise_signal(signal.SIGTERM)
+            return wait(child, timeout=0.01 if timeout is not None else 5)
+
+        def command(argv, _cwd, **_kwargs):
+            if argv[:3] == ["git", "worktree", "add"]:
+                Path(argv[5]).mkdir()
+
+        def execute(args, **callbacks):
+            with (patch.object(pilot.runner, "preflight", return_value={"title": "Prototype"}),
+                  patch.object(pilot.runner, "run_cmd", side_effect=command),
+                  patch.object(pilot.runner, "verify_checkout")):
+                return orchestrate(args, **callbacks)
+
+        self.execute.side_effect = execute
+        try:
+            with (patch.object(pilot.runner.subprocess, "Popen", side_effect=spawn),
+                  patch.object(popen, "wait", autospec=True, side_effect=wait_with_stop) as waits,
+                  patch.object(pilot.runner.os, "killpg", wraps=killpg) as shutdown,
+                  patch.object(pilot.runner, "pr_details", side_effect=AssertionError("unexpected PR lookup")) as pr):
+                code = self.run_cli("--continuous", with_signals=True)
+            self.assertEqual(len(children), 1)
+            child = children[0]
+            self.assertEqual(shutdown.call_args_list, [call(child.pid, signal.SIGTERM),
+                                                       call(child.pid, signal.SIGKILL)])
+            self.assertEqual(waits.call_args_list, [call(child, timeout=3600), call(child, timeout=5), call(child)])
+            self.assertEqual(child.returncode, -signal.SIGKILL)  # No poll/wait to reap it in the test.
+            self.assertTrue(child.stdout.closed)
+        finally:
+            for child in children:
+                if child.returncode is None:
+                    child.kill()
+                    wait(child, timeout=5)
+                child.stdout.close()
+
+        self.assertEqual(code, 130)
+        self.execute.assert_called_once()
+        self.board_read.assert_called_once_with(7)
+        self.project.post.assert_called_once_with(14, "In Progress")
+        pr.assert_not_called()
+        state_dir = self.run_home / "issue-14"
+        state = json.loads((state_dir / "state.json").read_text())
+        self.assertEqual(state["phase"], "blocked")
+        self.assertIn("Inspect the Project card", state["reason"])
+        self.assertTrue(Path(state["development_worktree"]).is_dir())
+        self.assertIn("stand-in ignoring SIGTERM", (state_dir / "developer-0.log").read_text())
 
     def test_continuous_rechecks_branch_after_idle(self):
         self.selection.side_effect = [Selection([], ["No eligible work."])]

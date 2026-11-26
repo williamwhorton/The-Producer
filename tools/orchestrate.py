@@ -178,8 +178,8 @@ def agent_environment(cwd: Path) -> dict[str, str]:
 
 
 @contextmanager
-def defer_launch_interrupt():
-    """Don't unwind Popen before the new process group has a handle."""
+def defer_process_interrupt():
+    """Delay stop handlers while acquiring a process handle or shutting down its group."""
     if threading.current_thread() is not threading.main_thread():
         yield lambda: None
         return
@@ -238,7 +238,7 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
         process = pump = None
         try:
             env = agent_environment(cwd)
-            with defer_launch_interrupt() as check_pending:
+            with defer_process_interrupt() as check_pending:
                 # A stop received while installing the handlers is still pre-launch.
                 check_pending()
                 try:
@@ -256,20 +256,21 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
         except (subprocess.TimeoutExpired, KeyboardInterrupt, Blocked) as exc:
             if process is None:
                 raise
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                pass
-            # The group may still contain descendants even if its leader exited.
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
+            with defer_process_interrupt():
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+                # The group may still contain descendants even if its leader exited.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
             if isinstance(exc, KeyboardInterrupt):
                 raise KeyboardInterrupt("Agent stopped; check its transcript") from exc
             if isinstance(exc, Blocked):
