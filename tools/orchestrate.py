@@ -250,7 +250,10 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
                 pump = threading.Thread(target=stream, daemon=True)
                 pump.start()
             code = process.wait(timeout=timeout)
-        except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+            pump.join(timeout=2)
+            if pump.is_alive():
+                raise Blocked(f"Agent stopped (transcript drain timed out); read {log_path} before retrying.")
+        except (subprocess.TimeoutExpired, KeyboardInterrupt, Blocked) as exc:
             if process is None:
                 raise
             try:
@@ -269,13 +272,17 @@ def run_agent(argv: list[str], cwd: Path, log_path: Path, timeout: int) -> str:
             process.wait()
             if isinstance(exc, KeyboardInterrupt):
                 raise KeyboardInterrupt("Agent stopped; check its transcript") from exc
+            if isinstance(exc, Blocked):
+                raise
             raise Blocked("Agent stopped (timeout); check logs. "
                           "The worktree is preserved for inspection.") from exc
         finally:
-            if pump is not None:
-                pump.join(timeout=2)
-            if process is not None and process.stdout is not None:
-                process.stdout.close()
+            try:
+                if pump is not None and pump.is_alive():
+                    pump.join(timeout=2)
+            finally:
+                if process is not None and process.stdout is not None:
+                    process.stdout.close()
     if code != 0:
         raise Blocked(f"OpenCode exited {code}; read {log_path} before retrying.")
     return log_path.read_text(encoding="utf-8", errors="replace")

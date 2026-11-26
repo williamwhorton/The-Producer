@@ -8,6 +8,7 @@ import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import Mock, call, patch
 
@@ -485,6 +486,88 @@ class PilotTests(unittest.TestCase):
         self.assertIn("Agent stopped", self.stderr.getvalue())
         self.board_read.assert_called_once_with(7)
         self.project.post.assert_called_once_with(14, "In Progress")
+
+    def run_with_descendant_holding_transcript(self, *, interrupt):
+        self.repo.mkdir()
+        self.project.status.side_effect = ["Ready", "In Progress", "In Progress", "In Progress", "Blocked"]
+        orchestrate = pilot.runner.orchestrate
+        popen, join, killpg = subprocess.Popen, threading.Thread.join, os.killpg
+        children, pumps = [], []
+        script = ("import os, signal\n"
+                  "if os.fork() == 0:\n"
+                  "    signal.pause()\n"
+                  "else:\n"
+                  "    print('stand-in leader exiting', flush=True)\n")
+
+        def spawn(_argv, **kwargs):
+            child = popen([sys.executable, "-c", script], **kwargs)
+            children.append(child)
+            return child
+
+        def drain(pump, *, timeout):
+            if not pumps:
+                pumps.append(pump)
+                self.assertEqual(children[0].returncode, 0)
+                self.assertTrue(pump.is_alive(), "descendant must still hold stdout after leader exit")
+                if interrupt:
+                    signal.raise_signal(signal.SIGTERM)
+                return join(pump, timeout=0.01)  # Exercise expiry without the full production wait.
+            return join(pump, timeout=timeout)
+
+        def command(argv, _cwd, **_kwargs):
+            if argv[:3] == ["git", "worktree", "add"]:
+                Path(argv[5]).mkdir()
+
+        def execute(args, **callbacks):
+            with (patch.object(pilot.runner, "preflight", return_value={"title": "Prototype"}),
+                  patch.object(pilot.runner, "run_cmd", side_effect=command),
+                  patch.object(pilot.runner, "verify_checkout")):
+                return orchestrate(args, **callbacks)
+
+        self.execute.side_effect = execute
+        try:
+            with (patch.object(pilot.runner.subprocess, "Popen", side_effect=spawn),
+                  patch.object(threading.Thread, "join", autospec=True, side_effect=drain),
+                  patch.object(pilot.runner.os, "killpg", wraps=killpg) as shutdown,
+                  patch.object(pilot.runner, "pr_details", side_effect=AssertionError("unexpected PR lookup")) as pr):
+                code = self.run_cli("--continuous", with_signals=True)
+            self.assertEqual(shutdown.call_args_list, [call(children[0].pid, signal.SIGTERM),
+                                                       call(children[0].pid, signal.SIGKILL)])
+            self.assertFalse(pumps[0].is_alive(), "group shutdown must release the transcript pipe")
+            self.assertTrue(children[0].stdout.closed)
+        finally:
+            # Do not leave a stand-in behind if the regression fails.
+            if children and (not pumps or pumps[0].is_alive()):
+                try:
+                    killpg(children[0].pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                children[0].wait(timeout=5)
+                if pumps:
+                    join(pumps[0], timeout=2)
+                children[0].stdout.close()
+
+        self.assertEqual(code, 130 if interrupt else 1)
+        self.execute.assert_called_once()
+        self.board_read.assert_called_once_with(7)
+        pr.assert_not_called()
+        state_dir = self.run_home / "issue-14"
+        state = json.loads((state_dir / "state.json").read_text())
+        self.assertEqual(state["phase"], "blocked")
+        self.assertTrue(Path(state["development_worktree"]).is_dir())
+        self.assertIn("stand-in leader exiting", (state_dir / "developer-0.log").read_text())
+        if interrupt:
+            self.assertIn("Inspect the Project card", state["reason"])
+            self.project.post.assert_called_once_with(14, "In Progress")
+        else:
+            self.assertIn("transcript drain timed out", state["reason"])
+            self.assertEqual(self.project.post.call_args_list, [call(14, "In Progress"), call(14, "Blocked")])
+
+    def test_sigterm_during_transcript_drain_stops_group_and_session(self):
+        self.run_with_descendant_holding_transcript(interrupt=True)
+
+    def test_transcript_drain_expiry_stops_group_and_session(self):
+        self.run_with_descendant_holding_transcript(interrupt=False)
 
     def test_continuous_rechecks_branch_after_idle(self):
         self.selection.side_effect = [Selection([], ["No eligible work."])]
