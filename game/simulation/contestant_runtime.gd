@@ -73,7 +73,12 @@ func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: 
 			"supernatural_belief": 0,
 			"staging_suspicion": 0,
 		}
+	_trace_state()
 	_clock.schedule_autonomous(_clock.current_tick() + 1, _step)
+
+
+func _trace_state() -> void:
+	_clock._trace(&"contestant_state", {"active": _actors, "departed": _departed})
 
 
 func camera_snapshot() -> Dictionary:
@@ -85,13 +90,17 @@ func take_audible_events() -> Array[Dictionary]:
 
 
 func queue_temperature(room: StringName, setting: Temperature) -> int:
-	return _clock.queue_live_trigger(
+	var ticket := _clock.queue_live_trigger(
 		func() -> bool: return _temperatures.has(room) and setting in Temperature.values(),
 		func() -> void: _temperatures[room] = setting)
+	_clock._trace(&"queued_temperature", {"id": ticket, "room": room, "setting": setting})
+	return ticket
 
 
 func queue_telephone_ring() -> int:
-	return _clock.queue_live_trigger(_can_ring, _ring)
+	var ticket := _clock.queue_live_trigger(_can_ring, _ring)
+	_clock._trace(&"queued_ring", {"id": ticket})
+	return ticket
 
 
 func _can_ring() -> bool:
@@ -129,6 +138,7 @@ func perceive_event(cell: Vector3i, cue: Cue, witnesses: Array[StringName]) -> b
 	for id: StringName in witnesses:
 		if not _actors.has(id):
 			return false
+	_clock._trace(&"perception", {"cell": cell, "cue": Cue.keys()[cue], "witnesses": witnesses})
 	for id: StringName in _actors:
 		if id in witnesses:
 			_remember(_actors[id], cell, cue)
@@ -149,6 +159,8 @@ func consider_sharing_evidence(speaker_id: StringName, listener_id: StringName,
 	for entry: Dictionary in speaker.memory:
 		# This slice allows sharing retained first-hand evidence, not relaying hearsay.
 		if entry.cell == cell and entry.cue == cue and not entry.has("reported_by"):
+			_clock._trace(&"shared_evidence", {"cell": cell, "cue": Cue.keys()[cue],
+				"speaker": speaker_id, "listener": listener_id})
 			_remember(_actors[listener_id], cell, cue, speaker_id)
 			return true
 	return false
@@ -222,7 +234,12 @@ func _step() -> void:
 			actor.cell = route.pop_front()
 			actor["last_move_tick"] = _clock.current_tick()
 		else:
-			_choose(actor)
+			var cue: Variant = actor.pending_cue
+			var reason := _choose(actor)
+			_clock._trace(&"decision", {"contestant_id": id, "activity": actor.activity,
+				"reason": reason, "cue": cue, "route": actor.route, "motive": actor.motive,
+				"staging_suspicion": actor.staging_suspicion, "stress": actor.stress,
+				"stay_motivation": actor.stay_motivation})
 		if actor.activity == &"leave" and actor.route.is_empty():
 			actor["departure"] = {
 				"kind": &"voluntary_departure",
@@ -231,10 +248,11 @@ func _step() -> void:
 			}
 			_departed[id] = actor
 			_actors.erase(id)
+	_trace_state()
 	_clock.schedule_autonomous(_clock.current_tick() + 1, _step)
 
 
-func _choose(actor: Dictionary) -> void:
+func _choose(actor: Dictionary) -> StringName:
 	var start: Vector3i = actor.cell
 	# Distrust can outweigh the reason to stay. Chronic pressure can tip a
 	# close choice, but a startle alone still only prompts a cue reaction.
@@ -243,8 +261,9 @@ func _choose(actor: Dictionary) -> void:
 		var exit_route := House.route_to_exit(start, _exit_id)
 		if not exit_route.is_empty():
 			_begin(actor, &"leave", exit_route)
-			return
+			return &"distrust_and_stress_outweigh_staying"
 
+	var routine_reason := &"ordinary_routine"
 	if actor.pending_cue != null:
 		var cue: Vector3i = actor.pending_cue
 		actor.pending_cue = null
@@ -252,19 +271,23 @@ func _choose(actor: Dictionary) -> void:
 			var reaction := _investigate(start, cue)
 			if not reaction.is_empty():
 				_begin(actor, &"investigate", reaction)
-				return
+				return &"investigate_perceived_cue"
+			routine_reason = &"no_reachable_investigation_lead"
 		else:
 			var refuge := _READ if House.room_at(cue) == &"parlor" else _REST
 			var blocked: Array[Vector3i] = []
 			if start != cue:
 				blocked.append(cue)
 			# If the cue cuts off the refuge, stay put for this reaction.
-			_begin(actor, &"avoid", House.find_route(start, refuge, blocked))
-			return
+			var route := House.find_route(start, refuge, blocked)
+			var reason := &"no_safe_route_to_refuge" if route.is_empty() else &"avoid_perceived_cue"
+			_begin(actor, &"avoid", route)
+			return reason
 
 	var rest: bool = actor.rest_next
 	actor.rest_next = not rest
 	_begin(actor, &"rest" if rest else &"read", House.find_route(start, _REST if rest else _READ))
+	return routine_reason
 
 
 func _investigate(start: Vector3i, cue: Vector3i) -> Array[Vector3i]:

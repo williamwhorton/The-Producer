@@ -52,9 +52,9 @@ godot --headless --path game --script res://tests/house_navigation.gd
   cannot extend the current tick's batch. This is not a player API for timed
   or conditional triggers.
 
-`advance()` does not publish raw events or logs. The regression fixture owns
-its private trace and final state; neither is returned to the preview, renderer,
-or HUD. Any future player view of live events must go through the approved
+`advance()` does not publish raw events or logs to callers. Only explicitly
+wired [headless development fixtures](#causal-trace-and-private-state-inspector-43)
+can receive the private trace. Any future player view of live events must go through the approved
 [observation boundary](../../docs/decisions/ADR-0004-producer-observation-boundary.md),
 not the scheduler or test fixture.
 
@@ -275,3 +275,36 @@ timeout 60s godot --headless --path game --script res://tests/live_observations.
 ```
 
 Expect `PASS: live camera motion and departure, localized ringing, coverage, and attended-only text`.
+
+## Causal trace and private-state inspector (#43)
+
+From the repository root, run the standalone developer fixture with the pinned
+native Godot editor executable:
+
+```sh
+timeout 60s godot --headless --no-header --path game \
+  --script res://tests/causal_trace.gd -- --print-trace --seed 21
+```
+
+The fixture writes one JSON record per line to stdout for 12 simulation ticks.
+The first record includes the seed, engine version, and tick duration. Compare
+two runs with seed `21`: their records should match byte for byte. With seed `22`,
+the first random draw picks the other equally near investigation lead. Neither
+seed changes `test_a`'s reason for investigating or `test_b`'s reason for leaving.
+The trace shows the ring's witnesses, accepted/rejected trigger tickets in
+resolution order, and the actual reason and result of each decision. Initial
+and end-of-tick `contestant_state` entries retain detached private memory,
+fear, stress, separate beliefs, routes and completed departures. Coordinates
+appear as Godot vector strings and the private snapshots retain the existing
+prototype enum values. The trace is a diagnostic, not a save/replay format.
+
+The simulation only accepts a trace sink at scheduler construction in a
+headless editor process. Other test fixtures can pass their own sink as the
+final `Scheduler.new()` argument; it receives detached records as above.
+The normal scene has no trace sink or CLI flag for enabling one. Player
+camera, sound, and attended-history APIs still use only the observation projector.
+The **Linux privacy check** export preset excludes `tests/` from its player
+pack, and exported executables also lack the editor feature required by the
+trace sink. To verify the pack and its startup, run the headless suite
+(`bash game/tests/headless.sh`); no native export templates are required for
+that pack check.

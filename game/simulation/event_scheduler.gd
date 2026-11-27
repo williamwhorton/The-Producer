@@ -14,15 +14,28 @@ var _tick := 0
 var _events: Dictionary[int, Array] = {}
 var _live_triggers: Dictionary[int, Callable] = {}
 var _next_trigger_id := 1
+var _trace_sink: Callable
 
 
-func _init(seed_value: int, tick_usec: int, fast_rate: int, very_fast_rate: int) -> void:
+func _init(seed_value: int, tick_usec: int, fast_rate: int, very_fast_rate: int,
+		trace_sink: Callable = Callable()) -> void:
 	if tick_usec <= 0 or fast_rate <= 1 or very_fast_rate <= fast_rate:
 		push_error("Simulation timing requires a positive tick and increasing speed rates.")
 		return
 	_rng.seed = seed_value
 	_tick_usec = tick_usec
 	_rates = [1, fast_rate, very_fast_rate]
+	# Only explicitly wired, headless runs of the development editor can collect
+	# traces. Export templates (even debug ones) have no editor feature.
+	if OS.has_feature("editor") and DisplayServer.get_name() == "headless":
+		_trace_sink = trace_sink
+	_trace(&"run", {"seed": seed_value, "tick_usec": tick_usec,
+		"engine": Engine.get_version_info().string})
+
+
+func _trace(kind: StringName, details: Dictionary) -> void:
+	if _trace_sink.is_valid():
+		_trace_sink.call({"tick": _tick, "kind": kind, "details": details.duplicate(true)})
 
 
 func current_tick() -> int:
@@ -40,7 +53,9 @@ func set_speed(speed: Speed) -> void:
 
 
 func draw_int(minimum: int, maximum: int) -> int:
-	return _rng.randi_range(minimum, maximum)
+	var value := _rng.randi_range(minimum, maximum)
+	_trace(&"random_draw", {"minimum": minimum, "maximum": maximum, "value": value})
+	return value
 
 
 func schedule_autonomous(due_tick: int, resolve: Callable) -> bool:
@@ -56,13 +71,18 @@ func queue_live_trigger(can_execute: Callable, execute: Callable) -> int:
 	var trigger_id := _next_trigger_id
 	_next_trigger_id += 1
 	_live_triggers[trigger_id] = func() -> void:
-		if can_execute.call():
+		var accepted: bool = can_execute.call()
+		_trace(&"live_trigger", {"id": trigger_id, "accepted": accepted})
+		if accepted:
 			execute.call()
 	return trigger_id
 
 
 func cancel_live_trigger(trigger_id: int) -> bool:
-	return _paused and _live_triggers.erase(trigger_id)
+	var cancelled := _paused and _live_triggers.erase(trigger_id)
+	if cancelled:
+		_trace(&"cancelled_trigger", {"id": trigger_id})
+	return cancelled
 
 
 func advance(elapsed_usec: int) -> void:
@@ -89,5 +109,7 @@ func _resolve_tick() -> void:
 	if _events.has(_tick):
 		var events: Array = _events[_tick]
 		_events.erase(_tick)
-		for resolve: Callable in events:
+		for index in events.size():
+			_trace(&"autonomous_event", {"batch_index": index})
+			var resolve: Callable = events[index]
 			resolve.call()
