@@ -1,6 +1,6 @@
 # GitHub Project Status automation
 
-**Issues:** [#11](https://github.com/williamwhorton/The-Producer/issues/11), [#107](https://github.com/williamwhorton/The-Producer/issues/107)
+**Issues:** [#11](https://github.com/williamwhorton/The-Producer/issues/11), [#107](https://github.com/williamwhorton/The-Producer/issues/107), [#114](https://github.com/williamwhorton/The-Producer/issues/114)
 **Workflow:** `.github/workflows/project-status-sync.yml`
 **Script:** `tools/sync_project_status.py`
 
@@ -93,7 +93,7 @@ Shortcut: [The-Producer → Actions variables](https://github.com/williamwhorton
 
    This assigns the active architecture spike **#4** to In Progress and its dependent simulation work **#5** to Blocked. **Do not include #11:** merging this PR closes #11, and specifying `11=In Progress` for a closed issue makes reconciliation fail.
 7. Click the final **Run workflow** button to submit.
-8. Select the newest run; open its **sync** job and **Update Project Status** step. Confirm a green success check and inspect the logged `#N: previous -> new` transitions.
+8. Select the newest run; open its **sync** job and **Update Project Status and handle owner assignment commands** step. Confirm a green success check and inspect the logged `#N: previous -> new` transitions.
 9. Return to the Project board. Verify:
    - Issue **#2** → **Done** (closed).
    - Issue **#4** → **In Progress** (initial override).
@@ -147,7 +147,7 @@ Only owner-authored standalone status comments trigger these changes. If an agen
 
 The workflow does **not** infer approval or readiness from priority, assignment, or a PR being created. A merged PR without a closing reference does **not** automatically close the issue.
 
-All events and manual reconciliations share one workflow-level writer, `project-status-sync`. GitHub's [queued concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) (`queue: max`) retains up to 100 pending runs instead of replacing the one pending run on each new arrival. For example, [run 255](https://github.com/williamwhorton/The-Producer/actions/runs/45524717103) was cancelled under the previous configuration because another request was waiting for that group. Once the new queue is full, additional runs can still be cancelled. GitHub queues by when a run starts waiting, not by source event time; do not rely on delivery order, especially for multiple events on the same issue.
+Status events, manual reconciliations, and the native metadata backfill workflow share one writer group, `project-status-sync`. GitHub's [queued concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) (`queue: max`) retains up to 100 pending runs instead of replacing the one pending run on each new arrival. For example, [run 255](https://github.com/williamwhorton/The-Producer/actions/runs/45524717103) was cancelled under the previous configuration because another request was waiting for that group. Once the new queue is full, additional runs can still be cancelled. GitHub queues by when a run starts waiting, not by source event time; do not rely on delivery order, especially for multiple events on the same issue.
 
 ## Agent-triggered transitions
 
@@ -175,13 +175,44 @@ gh issue comment 4 --repo williamwhorton/The-Producer --body "/status In Progres
 
 For security, status comments are accepted only when posted by the repository's owner, and PR-triggered transitions require the PR to originate from the same repository. Do not add arbitrary status commands to untrusted PR descriptions.
 
+## Owner-authorized assignment synchronization
+
+For a Lead-prepared Developer issue, use a new standalone `/assignment sync` issue comment from `williamwhorton`. GitHub must report the comment author as `williamwhorton`, as for `/status`. If a connector posts as a bot or other identity, stop and report that identity; the owner can post in the GitHub UI or through owner-authenticated `gh`. The command targets the issue carrying the comment and the body as it existed when posted. Edit the issue first, review the complete scope and declaration, then post the command. An edit to the body requires a fresh command.
+
+Start the issue body with the selection marker, followed by exactly one standalone, unindented fenced JSON declaration. Put the approved scope below the closing fence. For example:
+
+````markdown
+Selection-ready implementation; prerequisites: none
+
+```assignment-v1
+{
+  "type": "Task",
+  "priority": "High",
+  "workstreams": ["Infrastructure", "QA"],
+  "requires_human_approval": false,
+  "prerequisites": []
+}
+```
+
+## Outcome
+Describe the approved deliverable and acceptance criteria here.
+````
+
+All five keys are required. Use the exact native Type, Priority and Workstream option names; use one Workstream for a single-select field or one or more for a multi-select field. Use a JSON boolean for approval (`true` → `Yes`, `false` → `No`). Use distinct local issue numbers in `prerequisites`, or `[]` for none. With a nonempty list the first nonempty line must be `Selection-ready implementation; prerequisites: native`. Existing intake hints and narrative references do not declare assignments or authorize changes. The existing `agent:developer` label, assignee, approved scope marker and accepted-closure requirements still apply.
+
+The workflow uses the existing `PROJECTS_TOKEN` and native API access already used by the [metadata migration](issue-metadata-migration.md#one-time-setup). It does not create field options or require new permissions. Ordinary sync adds missing values and dependencies and refuses to overwrite a conflicting populated field or remove any dependency. After inspecting the conflicts, the owner can explicitly authorize replacement with exactly `/assignment sync --replace` on that same issue. Unrelated native fields are preserved. Closed issues, active (`In Progress` or `In Review`) cards and issues with open linked PRs are refused.
+
+The workflow reads back matching native metadata and dependencies, checks the approval and accepted prerequisite gates, then verifies `Ready` through the normal Project Status writer. An already matching Ready assignment needs no writes. If a Ready card needs changes, it is verified Blocked before metadata writes. If a write or verification fails, prior native changes may remain; read the Actions log and live issue/card, fix the cause, review present values, and post a fresh command to finish. Re-running an old assignment job is refused. If the status response is lost, the workflow attempts to withdraw any observed Ready result. An outage can prevent that read or write too. Stop dispatch and verify the actual card before resuming. Pause dispatch for the target and avoid manual edits/status changes while replacing metadata: GitHub does not offer an atomic transaction spanning issues, dependencies and Projects.
+
+The runner still independently checks the live card, native metadata and prerequisite acceptance. Publishing Ready does not start a runner or authorize a merge.
+
 ## Reconciliation and failure recovery
 
 Each write is read back from the same card before the run logs `#N: previous -> new (verified)`. `#N: already <status>` means the existing card was read and matched without a write. A failed read-back fails the run, but the write may already have landed. Neither result guarantees the card cannot change later. The read, write and verification are not atomic with owner moves or issue/PR changes. The single-assignment pilot still requires its own actual-card checks before Build and at handoff; a queued claim that cannot be verified in time stops the pilot.
 
 For a failed, cancelled, stale, or conflicting event, reconcile only the affected issue first:
 
-1. Pause new transitions for that issue and stop dispatch. In [Actions](https://github.com/williamwhorton/The-Producer/actions/workflows/project-status-sync.yml), identify the run from its triggering issue, comment, or PR and inspect its conclusion, annotations and **Update Project Status** log. Wait for already queued/running status runs to finish before correcting the card. If they do not finish within your verification window, stop and escalate rather than issuing another command.
+1. Pause new transitions for that issue and stop dispatch. In [Actions](https://github.com/williamwhorton/The-Producer/actions/workflows/project-status-sync.yml), identify the run from its triggering issue, comment, or PR and inspect its conclusion, annotations and **Update Project Status and handle owner assignment commands** log. Wait for already queued/running status runs to finish before correcting the card. If they do not finish within your verification window, stop and escalate rather than issuing another command.
 2. Read the issue's current state, any active linked PR, and the actual card (for example, `gh issue view "$ISSUE" --repo williamwhorton/The-Producer --json state,projectItems`). The owner confirms the intended status **now**; do not infer it by sorting old events or re-run a historical job. If the card already matches, stop with no write. Resolve any API/configuration failure before attempting a correction; do not change credentials as a test.
 3. For an open issue with a confirmed mismatch, the owner posts **one fresh** `/status <confirmed status>` issue comment. For a closed issue that is not Done, use the existing manual reconciliation on `main` with a **blank** `bootstrap_statuses` input if its repository-wide effects are appropriate; otherwise have the owner correct just the affected closed card in the Project UI. Never reopen or close issues as a recovery mechanism.
 4. Check the new run, if one was requested, and re-read the affected card. If the attempt fails, times out, still disagrees, or the owner's intent changes, stop and report the run URL, issue and observed status to the Creative Director. Do not send repeated commands or re-dispatch on uncertainty.

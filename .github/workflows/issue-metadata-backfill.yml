@@ -28,8 +28,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: issue-metadata-backfill
+  # Share the native metadata write lock with owner-authorized assignment sync.
+  group: project-status-sync
   cancel-in-progress: false
+  queue: max
 
 jobs:
   metadata:

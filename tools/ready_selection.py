@@ -263,7 +263,11 @@ def accepted_closure(read, number):
     context = f"Closure of prerequisite #{number}"
     result = repository_result(repository_query(read, context, CLOSURE, "-F", f"number={number}",
                                                 missing_issue_ok=True), context)
-    issue = result["issue"]
+    return closure_exclusion(result["issue"])
+
+
+def closure_exclusion(issue):
+    """Check accepted closure from the CLOSURE query result."""
     if not issue:
         return "prerequisite inaccessible"
     if issue["state"] != "CLOSED" or issue["stateReason"] != "COMPLETED":

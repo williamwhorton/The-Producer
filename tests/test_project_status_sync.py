@@ -1,25 +1,23 @@
 """Offline tests for the GitHub Project status sync logic."""
-import importlib.util
 from pathlib import Path
 import unittest
 from unittest.mock import Mock
 
+from tools import sync_project_status as sync
+
 ROOT = Path(__file__).resolve().parents[1]
-FILE = ROOT / "tools" / "sync_project_status.py"
-spec = importlib.util.spec_from_file_location("project_sync", FILE)
-sync = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(sync)
 
 
 class WorkflowTests(unittest.TestCase):
     def test_all_events_share_one_queued_non_cancelling_group(self):
-        workflow = (ROOT / ".github/workflows/project-status-sync.yml").read_text()
-        # Check workflow-level concurrency without adding a YAML dependency.
-        self.assertRegex(
-            workflow,
-            r"(?m)^concurrency:\n  group: project-status-sync\n"
-            r"  cancel-in-progress: false\n  queue: max\n",
-        )
+        for name in ("project-status-sync.yml", "issue-metadata-backfill.yml"):
+            with self.subTest(workflow=name):
+                workflow = (ROOT / ".github/workflows" / name).read_text()
+                self.assertRegex(
+                    workflow,
+                    r"(?m)^concurrency:\n(?:  #[^\n]*\n)*  group: project-status-sync\n"
+                    r"  cancel-in-progress: false\n  queue: max\n",
+                )
 
 
 class CommandTests(unittest.TestCase):
@@ -186,10 +184,10 @@ class ProjectTests(unittest.TestCase):
                         "id": "I_1",
                         "projectItems": {"nodes": [{
                             "id": "PV_1", "project": {"id": "P_1"},
-                            "fieldValues": {"nodes": [{
+                            "fieldValueByName": {
                                 "name": self.current,
                                 "field": {"id": "SF_1"},
-                            }]},
+                            },
                         }]},
                     }}}
                 if query == sync.UPDATE_QUERY:
@@ -236,6 +234,33 @@ class ProjectTests(unittest.TestCase):
                 ])
                 with self.assertRaisesRegex(sync.SyncError, "different or missing card"):
                     self.project.update(4, "In Review")
+
+    def test_assignment_status_write_refuses_a_new_claim(self):
+        with self.assertRaisesRegex(sync.SyncError, "refused Ready from current Status In Progress"):
+            self.project.update(4, "Ready", only_from=("Backlog", "Blocked"))
+        self.assertEqual(self.api.calls, [sync.ISSUE_QUERY])
+
+    def test_card_lookup_reaches_later_pages(self):
+        def response(nodes, more, cursor):
+            return {"repository": {"issue": {"id": "I_1", "projectItems": {
+                "nodes": nodes, "pageInfo": {"hasNextPage": more, "endCursor": cursor},
+            }}}}
+
+        cursors = []
+
+        def graphql(query, variables):
+            self.assertEqual(query, sync.ISSUE_QUERY)
+            cursor = variables["cursor"]
+            cursors.append(cursor)
+            if cursor is None:
+                return response([{"id": "other", "project": {"id": "other"}}], True, "next")
+            return response([{"id": "PV_1", "project": {"id": self.project.id},
+                              "fieldValueByName": {"name": "In Review", "field": {"id": self.project.field}}}],
+                            False, None)
+
+        self.api.graphql = graphql
+        self.assertEqual(self.project.find_item(4), ("PV_1", "In Review", "I_1"))
+        self.assertEqual(cursors, [None, "next"])
 
 
 if __name__ == "__main__":
