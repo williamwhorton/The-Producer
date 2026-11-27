@@ -46,7 +46,7 @@
 - Keep the release path complete when scope changes: update issues, acceptance criteria, requirements/ADRs, and the delivery plan, clearly identifying approved deferrals.
 
 - The GitHub Project **Status** field must reflect work in real time. See `docs/project-status-automation.md` for status commands and the Actions automation.
-- On issue creation the workflow assigns **Backlog**. When approved work becomes executable, the Lead posts `/status Ready`; when an agent begins, it posts `/status In Progress`. A real dependency/blocker requires `/status Blocked` with the reason in the issue.
+- On issue creation the workflow assigns **Backlog**. The Lead publishes specified, authorized work as **Ready**, even with validated native **Blocked by** prerequisites still open. Dispatch waits for accepted prerequisite completion. When work begins, the agent or host pilot posts `/status In Progress`; an impediment to active work requires `/status Blocked` with the reason in the issue.
 - When a ready PR with `Closes #N` opens, the project workflow moves the referenced issue **In Review**; explicit `/status In Review` is available for non-PR review.
 - After human acceptance, merge/close the issue; **Done** is driven by the issue-closed event, never an assertion that unaccepted work is finished.
 - An agent with GitHub CLI access may post the exact status command as a comment on the issue and **verify it succeeded**. If CLI/permissions fail, report the transition needed and arrange it through the authorized GitHub integration. Do not claim Project status changed until confirmed.

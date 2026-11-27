@@ -448,6 +448,27 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('Next issue: #1 "Work 1"', out)
         self.assertRegex(out, r"SKIP #2 .*approved implementation .*not confirmed")
 
+    def test_ready_dependent_waits_for_accepted_closure_while_independent_work_is_selected(self):
+        for state, reason, closure_payload, waiting in (
+            ("open", None, None, "prerequisite is open"),
+            ("closed", "completed", closure(closing_pr(merged=False)), "no owner-accepted closing merge"),
+            ("closed", "completed", closure(closing_pr()), None),
+        ):
+            with self.subTest(state=state, waiting=waiting):
+                rows = [
+                    assignment(1, blockers=[blocker(90, state, reason)], fields=fields_for(priority="Urgent")),
+                    assignment(2, fields=fields_for(priority="Low")),
+                ]
+                closures = [] if closure_payload is None else [closure_payload]
+                code, out, err, _ = self.select(rows, pr_page(), issue_prs(), *closures, issue_prs())
+                self.assertEqual((code, err), (0, ""))
+                if waiting:
+                    self.assertIn('Next issue: #2 "Work 2"', out)
+                    self.assertIn(f'WAIT #1 "Work 1": #90: {waiting}', out)
+                else:
+                    self.assertIn('Next issue: #1 "Work 1"', out)
+                    self.assertNotIn("WAIT #1", out)
+
     def test_closed_dependencies_need_direct_accepted_completion(self):
         rows = [
             assignment(1, blockers=[blocker(90, "closed", "completed")]),

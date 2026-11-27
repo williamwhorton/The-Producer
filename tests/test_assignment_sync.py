@@ -68,7 +68,6 @@ class FakeGitHub:
         self.reject_once = None
         self.drop_dependency = None
         self.lose_ready_response = False
-        self.unaccepted = set()
 
     def list_all(self, path):
         if path == FIELDS:
@@ -133,20 +132,6 @@ class FakeGitHub:
             }]}}}}
         if query == assignment.ISSUE_PRS:
             return {"repository": {"issue": {"closedByPullRequestsReferences": {"nodes": self.linked_prs}}}}
-        if query == assignment.CLOSURE:
-            number = variables["number"]
-            accepted = number not in self.unaccepted and self.issues[number]["state"] == "closed"
-            return {"repository": {"issue": {
-                "state": "CLOSED" if self.issues[number]["state"] == "closed" else "OPEN",
-                "stateReason": "COMPLETED",
-                "timelineItems": {"nodes": [{
-                    "__typename": "ClosedEvent", "actor": {"login": OWNER},
-                    "closer": {
-                        "__typename": "PullRequest", "merged": accepted, "baseRefName": "main",
-                        "repository": {"nameWithOwner": f"{OWNER}/{REPO}"}, "mergedBy": {"login": OWNER},
-                    },
-                }]},
-            }}}
         if query == status.UPDATE_QUERY:
             self.current_status = variables["option"]
             self.writes.append(("STATUS", self.current_status, None))
@@ -245,6 +230,7 @@ class AssignmentTests(unittest.TestCase):
         with self.assertRaisesRegex(MetadataError, "Self or cyclic"):
             self.sync()
         self.api.issue["body"] = body()
+        self.api.issues[16] = issue(16, state="open")
         self.api.links[16] = {99}
         self.api.links[99] = {35}
         with self.assertRaisesRegex(MetadataError, "Self or cyclic"):
@@ -253,6 +239,30 @@ class AssignmentTests(unittest.TestCase):
         with self.assertRaisesRegex(MetadataError, "404"):
             self.sync()
         self.assertEqual(self.api.writes, [])
+
+    def test_duplicate_native_ids_cannot_collapse_declared_dependencies(self):
+        self.api.issues[34]["id"] = self.api.issues[16]["id"]
+        with self.assertRaisesRegex(MetadataError, "Ambiguous native prerequisite identity"):
+            self.sync()
+        self.assertEqual(self.api.writes, [])
+
+    def test_shared_prerequisite_and_invalid_transitive_identity(self):
+        self.api.links[16] = {99}
+        self.api.links[34] = {99}
+        list_all = self.api.list_all
+
+        def external_second_link(path):
+            rows = list_all(path)
+            if path == f"{PATH}/34/dependencies/blocked_by":
+                rows[0]["url"] = "https://api.github.com/repos/other/repo/issues/99"
+            return rows
+
+        with patch.object(self.api, "list_all", side_effect=external_second_link):
+            with self.assertRaisesRegex(MetadataError, "external prerequisite chain"):
+                self.sync()
+        self.assertEqual(self.api.writes, [])
+        self.sync()
+        self.assertEqual(self.api.current_status, "Ready")
 
     def test_partial_write_stays_blocked_and_can_retry(self):
         self.api.current_status = "Ready"
@@ -290,11 +300,12 @@ class AssignmentTests(unittest.TestCase):
         self.assertEqual(self.api.values[3]["single_select_option"], {"name": "Yes"})
         self.assertEqual(self.api.current_status, "Backlog")
 
-    def test_prerequisite_without_accepted_closure_is_not_ready(self):
-        self.api.unaccepted.add(34)
-        with self.assertRaisesRegex(MetadataError, "#34 not accepted"):
-            self.sync()
-        self.assertEqual(self.api.current_status, "Backlog")
+    def test_open_and_unaccepted_prerequisites_do_not_prevent_publication(self):
+        self.api.issues[16] = issue(16, state="open")
+        self.api.issues[34]["state_reason"] = "not_planned"
+        self.sync()
+        self.assertEqual(self.api.links[35], {16, 34})
+        self.assertEqual(self.api.current_status, "Ready")
 
     def test_active_board_status_open_pr_and_closed_issue_are_protected(self):
         for state in ("In Progress", "In Review"):
