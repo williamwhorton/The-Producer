@@ -16,6 +16,8 @@ projection = 1
 current = true
 size = 11.5
 
+[node name="Contestants" type="Node3D" parent="."]
+
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_house")
 

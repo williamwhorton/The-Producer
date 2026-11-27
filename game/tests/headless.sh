@@ -35,3 +35,4 @@ check --script res://tests/contestant_sharing.gd
 check --script res://tests/contestant_departure.gd
 check --script res://tests/prepared_effects.gd
 check --script res://tests/live_observations.gd
+check --script res://tests/live_dollhouse.gd

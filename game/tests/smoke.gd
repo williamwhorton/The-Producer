@@ -50,20 +50,39 @@ func _run() -> void:
 	_check(_hits_wall(space, Vector3(1.5, 0.1, 2.3), Vector3(1.5, 0.1, 2.8)),
 			"front wall still blocks the adjacent crossing")
 
+	var original_position := camera.position
+	var original_size := camera.size
+	var drag := InputEventMouseMotion.new()
+	drag.position = Vector2(520, 320)
+	drag.button_mask = MOUSE_BUTTON_MASK_RIGHT
+	drag.relative = Vector2(50, 30)
+	root.push_input(drag, true)
+	_check(camera.position != original_position, "right-drag pans the orthographic camera")
+	_mouse_button(MOUSE_BUTTON_WHEEL_UP, Vector2(520, 320))
+	_check(camera.size < original_size, "scrolling up zooms in")
+	_mouse_button(MOUSE_BUTTON_WHEEL_DOWN, Vector2(520, 320))
+	_check(is_equal_approx(camera.size, original_size), "scrolling down zooms back out")
+	await _click(camera.unproject_position(Vector3(-1.60, 0, 0.85)))
+	_check(room.text == "Parlor", "floor selection still works after moving the camera")
+
 	if _failures == 0:
-		print("PASS: configured main scene, room picking, doorway, exit, and route overlay")
+		print("PASS: configured main scene, room picking, pan/zoom, doorway, exit, and route overlay")
 	quit(0 if _failures == 0 else 1)
 
 
 func _click(position: Vector2) -> void:
-	var event := InputEventMouseButton.new()
-	event.button_index = MOUSE_BUTTON_LEFT
-	event.pressed = true
-	event.position = position
-	root.push_input(event, true)
+	_mouse_button(MOUSE_BUTTON_LEFT, position)
 	# physics_frame is emitted before Node._physics_process().
 	await physics_frame
 	await physics_frame
+
+
+func _mouse_button(button: MouseButton, position: Vector2) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = button
+	event.pressed = true
+	event.position = position
+	root.push_input(event, true)
 
 
 func _hits_wall(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> bool:
