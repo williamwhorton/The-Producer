@@ -122,10 +122,10 @@ makes the same startle more frightening. Synthetic relief removes that chronic
 stress without erasing the acute fear. Appraisal is not an action order: routes and motives
 still govern decisions, including opposite reactions at identical fear.
 
-The integer values, history cap and immediate relief are implementation/test
-placeholders, not final mechanics or balance. This slice does not model passive
-recovery, residual stress, cue habituation, or sensory range. The preview still
-consumes only the detached static plan and optional example route.
+The integer values, history cap and immediate synthetic relief are
+implementation/test placeholders. See #35 below for the running temperature,
+recovery and ring-specific familiarity fixture. The preview still consumes only
+the detached static plan and optional example route.
 
 ```sh
 godot --headless --path game --script res://tests/contestant_perception.gd
@@ -196,3 +196,49 @@ godot --headless --path game --script res://tests/contestant_departure.gd
 ```
 
 Expect `PASS: autonomous voluntary departure, legal exit travel, and active-cast isolation`.
+
+## Prepared temperature and telephone ring (#35)
+
+The headless runtime takes setup-only `thermostat_rooms` and an optional single
+`telephone` (cell, disconnected state and prepared independent ringer). The
+fixture models the physical means as installed capabilities. An unprepared room,
+unknown setpoint, invalid phone location, connected phone or missing ringer
+cannot be activated.
+
+`queue_temperature()` and `queue_telephone_ring()` return scheduler tickets,
+not success results. On the next running tick the existing scheduler validates
+each action before execution, including after tactical pause. An invalid request
+leaves the world unchanged; a valid temperature setting persists until changed.
+A valid trigger emits a simulated audible event at the phone's cell and tick,
+even in an empty room. The provisional hearing area is the source room only.
+The ring has no speech or call semantics, and there is no audio playback in the
+headless fixture.
+
+Each tick samples the active contestant's occupied room before movement. Hot
+and cold both set a stress target of 3 (comfortable: 0); current thermal load
+moves by one point per tick toward that target. Restoring comfort or walking to
+a comfortable room lowers the target, with gradual recovery. A ring resolves
+before that tick's exposure sample, so only accumulated load can amplify it.
+The first ring's fear spike is 2 plus current stress; each previous witnessed
+ring reduces that spike by one, with familiarity capped at 2 and a minimum
+spike of 1. It can raise current fear; fear decays by one on subsequent ticks.
+Familiarity with the ring affects neither thermal load nor other cues.
+
+The ring enters each witness's existing private memory. Provisional appraisal
+preferences supplied by the cast fixture let one witness read the same sound
+as anomalous and another suspect staging; an unspecified preference leaves the
+cause unexplained. Existing motives and routes still govern decisions. The
+sound record and witness data remain inside the simulation; the existing static
+observation projection receives neither, and no listening focus or transcript
+is created.
+
+Run `godot --headless --path game --script res://tests/prepared_effects.gd`.
+The paired runs use seed 21, 100 µs fixture ticks, the authored house and cast
+plus one colocated skeptic, and the phone at `(-2, 0, 1)` in the parlor. Queue
+the parlor setpoint during pause, cancel an extra ring, resume, and ring on
+ticks 4 and 6. Compare comfortable, hot and cold runs and repeat the hot run
+at 2× with the same tick inputs. Expected first-ring fear: 2 comfortable,
+5 hot and 5 cold; repeated hot ring: 4. Separate runs verify no-witness and
+post-departure isolation, invalid commands and recovery via both comfort reset
+and leaving the room. All numbers and room-level hearing are fixture choices.
+P1 floorboards, P4 popping bulb and P5 overnight placement remain separate slices.

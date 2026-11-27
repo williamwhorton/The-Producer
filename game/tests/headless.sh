@@ -33,3 +33,4 @@ check --script res://tests/contestant_runtime.gd
 check --script res://tests/contestant_perception.gd
 check --script res://tests/contestant_sharing.gd
 check --script res://tests/contestant_departure.gd
+check --script res://tests/prepared_effects.gd
