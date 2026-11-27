@@ -46,7 +46,7 @@ check --export-pack 'Linux privacy check' "$player_pack"
 check --script res://tests/causal_trace.gd -- --verify-pack "$player_pack"
 # Launch from the isolated pack and try the diagnostic arguments at the
 # actual player entry point. Only the explicit source test script honors them.
-run_godot --main-pack "$player_pack" --quiet --quit-after 2 -- --print-trace --seed 21
+run_godot --main-pack "$player_pack" --no-header --quit-after 2 -- --print-trace --seed 21
 if [[ -s "$log" ]]; then
     printf 'Expected no console output from the player entry point.\n' >&2
     exit 1

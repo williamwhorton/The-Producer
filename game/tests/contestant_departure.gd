@@ -113,20 +113,30 @@ func _run(scenario: Dictionary, fast: bool) -> Array:
 func _test_decision_at_threshold(exit_id: StringName) -> void:
 	var cast: Dictionary[StringName, Dictionary] = {A: {"start_cell": THRESHOLD, "room_id": &"study"}}
 	for example: Array in [
-		[[STARTLE, PRESSURE], 1, exit_id, false],
-		[[STAGING], 1, exit_id, true],
-		[[STAGING], 2, exit_id, false],
-		[[STAGING, PRESSURE], 2, exit_id, true],
-		[[STAGING], 1, &"missing", false],
-		[[], 1, exit_id, false],
+		[[STARTLE, PRESSURE], 1, exit_id, &""],
+		[[STAGING], 1, exit_id, &"distrust_outweighs_staying"],
+		[[STAGING], 2, exit_id, &""],
+		[[STAGING, PRESSURE], 2, exit_id, &"distrust_and_stress_outweigh_staying"],
+		[[STAGING], 1, &"missing", &""],
+		[[], 1, exit_id, &""],
 	]:
-		var clock := Scheduler.new(21, TICK_USEC, 2, 4)
+		var decisions: Array[Dictionary] = []
+		var clock := Scheduler.new(21, TICK_USEC, 2, 4, func(entry: Dictionary) -> void:
+			if entry.kind == &"decision":
+				decisions.append(entry.details)
+		)
 		var runtime := Runtime.new(cast, clock, MOTIVES, {}, {A: example[1]}, example[2])
 		for cue: Runtime.Cue in example[0]:
 			runtime.perceive_event(STUDY_CUE, cue, [A])
 		clock.advance(TICK_USEC)
-		_check(runtime._departed.has(A) == example[3] and runtime._actors.has(A) != example[3],
+		var expected_reason: StringName = example[3]
+		var should_leave := not expected_reason.is_empty()
+		_check(runtime._departed.has(A) == should_leave and runtime._actors.has(A) != should_leave,
 				"threshold departure needs a valid choice and exit: %s" % [example])
+		if should_leave:
+			_check(decisions.size() == 1 and decisions[0].activity == &"leave"
+					and decisions[0].reason == expected_reason,
+					"departure trace identifies what tipped the choice: %s" % expected_reason)
 		if runtime._departed.has(A):
 			_check(runtime._departed[A].cell == THRESHOLD and runtime._departed[A].departure.tick == 1,
 					"an eligible contestant already at the threshold completes on the decision tick")

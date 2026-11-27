@@ -256,11 +256,14 @@ func _choose(actor: Dictionary) -> StringName:
 	var start: Vector3i = actor.cell
 	# Distrust can outweigh the reason to stay. Chronic pressure can tip a
 	# close choice, but a startle alone still only prompts a cue reaction.
-	var leave_pressure: int = actor.staging_suspicion * _DISTRUST_WEIGHT + actor.stress
+	var distrust_pressure: int = actor.staging_suspicion * _DISTRUST_WEIGHT
+	var leave_pressure: int = distrust_pressure + actor.stress
 	if actor.staging_suspicion > 0 and leave_pressure > actor.stay_motivation:
 		var exit_route := House.route_to_exit(start, _exit_id)
 		if not exit_route.is_empty():
 			_begin(actor, &"leave", exit_route)
+			if distrust_pressure > actor.stay_motivation:
+				return &"distrust_outweighs_staying"
 			return &"distrust_and_stress_outweigh_staying"
 
 	var routine_reason := &"ordinary_routine"
