@@ -4,14 +4,18 @@ signal room_selected(room_id: StringName)
 
 const NO_ROOM := &""
 const SELECTION_COLOR := Color("#a8814f")
+const STATIONARY_COLOR := Color("#dce8ee")
+const MOVING_COLOR := Color("#ffe297")
 
 var _floors: Dictionary[StringName, MeshInstance3D] = {}
+var _contestant_markers: Dictionary[StringName, Node3D] = {}
 var _selection_material := StandardMaterial3D.new()
 var _selected := NO_ROOM
 var _pending_click := false
 var _click_position := Vector2.ZERO
 
 @onready var _camera: Camera3D = $Camera3D
+@onready var _initial_camera_size: float = _camera.size
 
 
 func _ready() -> void:
@@ -42,10 +46,68 @@ func show_plan(plan: Dictionary) -> void:
 		_draw_route(plan.example_route)
 
 
+func show_contestants(observed: Array[Dictionary]) -> void:
+	var missing := _contestant_markers.keys()
+	var cell_counts: Dictionary[Vector3i, int] = {}
+	for entry: Dictionary in observed:
+		var id: StringName = entry.contestant_id
+		var cell: Vector3i = entry.location.cell
+		var marker := _contestant_markers.get(id) as Node3D
+		if marker == null:
+			marker = _add_contestant_marker(id)
+			_contestant_markers[id] = marker
+		missing.erase(id)
+		marker.position = _cell_center(cell)
+
+		# Contestant routes can cross or share a cell. Stack the labels
+		# without displacing the projected positions.
+		var label: Label3D = marker.get_node("Identity")
+		var rank: int = cell_counts.get(cell, 0)
+		label.offset.y = rank * 53.0
+		cell_counts[cell] = rank + 1
+		label.modulate = MOVING_COLOR if entry.activity == &"moving" else STATIONARY_COLOR
+
+	for id: StringName in missing:
+		var marker: Node3D = _contestant_markers[id]
+		$Contestants.remove_child(marker)
+		marker.queue_free()
+		_contestant_markers.erase(id)
+
+
+func _add_contestant_marker(id: StringName) -> Node3D:
+	var marker := Node3D.new()
+	$Contestants.add_child(marker)
+	_mesh_box(marker, Vector3(0, 0.25, 0), Vector3(0.26, 0.5, 0.26), STATIONARY_COLOR, true)
+	var label := Label3D.new()
+	label.name = "Identity"
+	label.text = String(id)
+	label.position.y = 0.73
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.font_size = 48
+	label.pixel_size = 0.007
+	# This label represents the composite camera feed, even behind a prop.
+	label.no_depth_test = true
+	marker.add_child(label)
+	return marker
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		_click_position = event.position
-		_pending_click = true
+	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
+		var units_per_pixel := _camera.size / get_viewport().get_visible_rect().size.y
+		var axes := _camera.transform.basis
+		_camera.position += (axes.y * event.relative.y - axes.x * event.relative.x) * units_per_pixel
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.pressed:
+		match event.button_index:
+			MOUSE_BUTTON_LEFT:
+				_click_position = event.position
+				_pending_click = true
+			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
+				var factor := 1.1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.1
+				_camera.size = clampf(_camera.size / factor,
+						_initial_camera_size / 1.8, _initial_camera_size / 0.55)
+			_:
+				return
 		get_viewport().set_input_as_handled()
 
 

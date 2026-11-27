@@ -2,8 +2,8 @@
 
 This module owns simulation timing, event ordering, house routing, and prototype
 contestant autonomy. It runs without a scene tree, renderer, HUD, or persistence.
-The house preview uses a projection of the static floor plan; it does not run
-the scheduler or contestants.
+The [house preview](../README.md) runs the scheduler and contestants and renders
+the known floor plan and authorized live camera observations.
 
 ## House layout and routing (#29)
 
@@ -90,11 +90,9 @@ that reaction instead of crossing it. From #5, circumstances and motives
 determine the response, and the scheduler seed only breaks ties between equally
 near investigation leads. After the reaction, ordinary activity resumes.
 
-The runtime is exercised headlessly and is **not connected to the preview**.
-There are no player commands or actor data in the preview, and `--show-navigation`
-still draws the same static route, not a contestant's route. Any future live
-display must use a source-mediated projection under ADR-0004, not the runtime
-records inspected by the tests.
+The preview runs the same runtime. Its markers use authorized camera data under
+ADR-0004, and `--show-navigation` draws the fixed route example. It exposes no
+commands for controlling contestants.
 
 From the repository root:
 
@@ -124,8 +122,8 @@ still govern decisions, including opposite reactions at identical fear.
 
 The integer values, history cap and immediate synthetic relief are
 implementation/test placeholders. See #35 below for the running temperature,
-recovery and ring-specific familiarity fixture. The preview still consumes only
-the detached static plan and optional example route.
+recovery and ring-specific familiarity fixture. The preview receives camera
+observations without memories or appraisals.
 
 ```sh
 godot --headless --path game --script res://tests/contestant_perception.gd
@@ -155,7 +153,6 @@ evidence cell is not the conversation venue. No text is generated and there is
 no public conversation feed or archive. This does not designate a blind spot in
 the house: under ADR-0004/0005, future in-house speech must go through authorized
 surveillance and only speech actually attended live may enter readable history.
-The preview still consumes only the static plan and optional example route.
 
 ```sh
 godot --headless --path game --script res://tests/contestant_sharing.gd
@@ -187,9 +184,8 @@ private archive under the same ID, preserving their memory and recording one
 `voluntary_departure` with the exit ID and completion tick. The archived
 contestant no longer receives perceptions, shares evidence, moves, or makes
 decisions. This is an ordinary exit; no outside location, other fate, or season
-resolution is simulated. The static preview exposes no departure record, intent,
-or private state. Any future visible departure requires authorized evidence
-under ADR-0004/0005.
+resolution is simulated. Once a departed contestant is absent from the camera
+snapshot, the preview removes their marker. It exposes no departure record.
 
 ```sh
 godot --headless --path game --script res://tests/contestant_departure.gd
@@ -228,9 +224,9 @@ The ring enters each witness's existing private memory. Provisional appraisal
 preferences supplied by the cast fixture let one witness read the same sound
 as anomalous and another suspect staging; an unspecified preference leaves the
 cause unexplained. Existing motives and routes still govern decisions. The
-sound record and witness data remain inside the simulation; the existing static
-observation projection receives neither, and no listening focus or transcript
-is created.
+raw sound record and witness data remain inside the simulation. The audible
+projection below can report a covered ring; it creates no listening focus or
+transcript.
 
 Run `godot --headless --path game --script res://tests/prepared_effects.gd`.
 The paired runs use seed 21, 100 µs fixture ticks, the authored house and cast
@@ -267,8 +263,8 @@ sources are disabled. Camera and audio coverage are independent.
   currently produces neither. The ring changes neither focus nor dialogue
   history. The projector provides no playback or missed-speech lookup.
 
-The existing preview remains static. Issue #40 can use these observations for
-presentation without reading private actor or event dictionaries.
+The live dollhouse (#40) uses `camera_snapshot()` for its current marker set.
+It does not consume audio or speech evidence.
 
 ```sh
 timeout 60s godot --headless --path game --script res://tests/live_observations.gd

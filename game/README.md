@@ -17,17 +17,26 @@ godot --version
 godot --path game
 ```
 
-1. The window opens to **The Producer / HOUSE PREVIEW**, with a furnished
+1. The window opens to **The Producer / HOUSE PREVIEW / LIVE CAMERAS**, with a furnished
    parlor and study visible together from a fixed elevated angle. Look for
    the gap in the dividing wall and the marked **EXIT** in the near study wall.
    The footer reads **No room selected**.
-2. Left-click the exposed greenish floor in the parlor by the sofa. Only that
+2. Watch `test_a` and `test_b` move autonomously. Their markers show the latest
+   camera-projected cells; a gold name shows movement on that tick. A contestant
+   absent from the latest camera snapshot has no marker.
+3. Click **Pause** to freeze the latest camera view. **Resume** continues from
+   that point without catching up on paused wall time. Choose **Normal**,
+   **Fast**, or **Very Fast** to change clock speed. The preview uses a
+   provisional 0.5-second normal tick and 2×/4× faster rates.
+4. Left-click the exposed greenish floor in the parlor by the sofa. Only that
    floor turns gold and the footer reads **Parlor**.
-3. Left-click the exposed tan floor in the study by the desk. Only the study
+5. Left-click the exposed tan floor in the study by the desk. Only the study
    floor turns gold and the footer reads **Study**.
-4. Click the top of the desk. The floor returns to its original color and the
+6. Click the top of the desk. The floor returns to its original color and the
    footer reads **No room selected**. Select either floor again, then click
    the dark background outside the house to clear the selection again.
+7. Right-drag to pan and scroll to zoom. Navigation and room picking also
+   work while the simulation is paused.
 
 `res://main.tscn` is the configured entry point. No prior editor import,
 asset downloads, plugins, or runtime services are needed.
@@ -56,8 +65,8 @@ room, clear of furniture, and able to reach the named exit's interior threshold.
 Every room must appear once in `surveillance.camera_rooms`. A failed load
 reports the file and the offending field (or JSON line) and exits nonzero.
 
-These are authored scenario inputs, not a save format. No actors, live
-surveillance, or inheritance are instantiated by the preview. The
+These are authored scenario inputs, not a save format. The preview starts the
+existing deterministic runtime with this cast and camera coverage. The
 [modified test fixture](tests/fixtures/modified_scenario.json) uses the same
 house with a different cast and a route example that starts in the study; it
 is not used at startup or offered as another playable property.
@@ -66,19 +75,18 @@ is not used at startup or offered as another playable property.
 
 | Path | Responsibility in this slice |
 | --- | --- |
-| `main.tscn`, `main.gd` | Load the authored scenario, compose the world view and HUD, pass the projected floor plan to the renderer and translate room selection to a HUD label. |
+| `main.tscn`, `main.gd` | Load the authored scenario, drive the simulation clock, and send the known floor plan and latest camera observations to the world view. Route HUD time controls to the clock and room selection to the HUD. |
 | `observation/` | Project the producer-known floor plan and, separately, the runtime's [authorized live evidence](simulation/README.md#live-producer-observations-39) under ADR-0004/0005. |
-| `world/` | Preview geometry, camera, lighting, cutaway, picking and floor highlight. The adapter emits a room ID, not a collider or 3D position. |
-| `ui/` | Title, room label and controls hint; no world or domain script dependency. |
+| `world/` | Preview geometry, observed contestant markers, camera, lighting, cutaway, picking and floor highlight. The adapter emits a room ID, not a collider or 3D position. |
+| `ui/` | Title, room label, controls hint, pause and speed controls; no world or domain script dependency. |
 | `scenarios/` | Local authored scenario input; no gameplay scene or saved state. |
-| `simulation/` | Scenario validation and [private seeded scheduler and clock, authored house topology and routing](simulation/README.md). The static preview does not run a contest simulation. |
+| `simulation/` | Scenario validation and [private seeded scheduler, authored house topology, routing, and contestant runtime](simulation/README.md). |
 | `persistence/` | Reserved for save/load and campaign state. No save API, format or storage is chosen or used. |
 
-The preview uses local Godot scenes/scripts only: a headless boot path (T-01
-foundation, not a deterministic simulation), separated modules (T-03), no
-runtime network or paid API dependency (T-04), and a 3D dollhouse view (G-03).
-The preview does not run actors or departures. The simulation's headless
-[voluntary departure fixture](simulation/README.md#voluntary-departure-34) is separate.
+The preview uses local Godot scenes/scripts only. It runs the authored cast's
+ordinary movement without player interventions. Marker removal is exercised by
+the headless live-dollhouse test with a controlled
+[voluntary departure fixture](simulation/README.md#voluntary-departure-34).
 
 ## Smoke checks
 
@@ -92,7 +100,7 @@ bash game/tests/headless.sh
 CI verifies the official Linux x86_64 archive checksum before running this
 script on Ubuntu 24.04. The script checks the full engine version, keeps Godot's
 output visible, and fails on a nonzero exit, a 60-second command timeout, or a
-Godot error in the logs. It runs these commands in order:
+Godot error in the logs. It includes these scene and foundation checks:
 
 ```sh
 godot --headless --path game --editor --import
@@ -102,13 +110,14 @@ godot --headless --path game --script res://tests/smoke.gd -- --show-navigation
 godot --headless --path game --script res://tests/scheduler.gd
 godot --headless --path game --script res://tests/house_navigation.gd
 godot --headless --path game --script res://tests/scenario_loading.gd
+godot --headless --path game --script res://tests/live_dollhouse.gd
 ```
 
 The first two commands should exit successfully without script/scene errors.
 The smoke test loads the configured main scene and checks the active orthographic
-camera, room picking, desk occlusion, background clearing, both openings and their
+camera, pan/zoom, room picking, desk occlusion, background clearing, both openings and their
 adjacent wall segments, and the opt-in route. Expect exit 0 and
-`PASS: configured main scene, room picking, doorway, exit, and route overlay`.
+`PASS: configured main scene, room picking, pan/zoom, doorway, exit, and route overlay`.
 The scheduler test runs separately from the scene; expect exit 0 and
 `PASS: seeded scheduler ordering, tactical pause, live triggers, and speed invariance`.
 The scene-free navigation test expects exit 0 and
@@ -116,6 +125,9 @@ The scene-free navigation test expects exit 0 and
 The scenario test loads both JSON files, checks that the modified parameters
 change the static route, and rejects invalid references and locations. Expect
 exit 0 and `PASS: authored and modified scenarios, reference and location validation`.
+The live-dollhouse test checks projected position and movement feedback, clock
+controls, private-state isolation and removal of a departed contestant's marker.
+Expect exit 0 and `PASS: live dollhouse positions and activity, time controls, and observation isolation`.
 The disposable `spikes/` are not used as substitutes. Headless checks do not
 verify rendered output.
 To repeat the scene smoke test with graphics enabled and the route visible, run
