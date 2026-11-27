@@ -191,6 +191,24 @@ class GitHub:
             raise MetadataError(f"GitHub API HTTP {err.code} ({method} {path})") from err
         except (URLError, OSError) as err:
             raise MetadataError(f"GitHub API {method} {path}: {type(err).__name__}") from err
+        except ValueError as err:
+            raise MetadataError(f"GitHub API returned invalid JSON ({method} {path})") from err
+
+    def list_all(self, path):
+        """Read a paginated REST list; callers supply a path without a query."""
+        rows = []
+        page = 1
+        while True:
+            batch = self.request(f"{path}?per_page=100&page={page}")
+            if not isinstance(batch, list):
+                raise MetadataError(f"GitHub API did not return a list at {path}")
+            if batch and page > 1 and batch == previous:
+                raise MetadataError(f"GitHub API repeated a page at {path}")
+            rows.extend(batch)
+            if len(batch) < 100:
+                return rows
+            previous = batch
+            page += 1
 
     def issues(self, owner, repo):
         page = 1

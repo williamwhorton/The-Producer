@@ -61,6 +61,7 @@ Follow [GitHub issue types, fields and priority conventions](project-board-setup
 The automation and one-time setup are documented in [Project Status automation](project-status-automation.md). The board's **Status** field is an operational signal and must be maintained at each handoff, not at the end of a week.
 
 - New issues enter **Backlog** automatically. Lead marks approved/unblocked work **Ready** through an owner-authored issue comment containing only `/status Ready`.
+- For a Lead-prepared assignment that needs native metadata reconciliation, the owner uses [`/assignment sync`](project-status-automation.md#owner-authorized-assignment-synchronization) after reviewing the declaration and scope. It verifies the native fields and prerequisites before moving the issue to Ready; the runner still performs its own checks.
 - When an agent starts on an issue, it posts `/status In Progress`. If a prerequisite prevents progress, the agent posts `/status Blocked` and describes the blocker in a separate issue comment or handoff. Resume with `/status In Progress`.
 - A non-draft PR with `Closes #N` in its body transitions the linked issue to **In Review**. The Reviewer may use `/status In Review` when no PR exists.
 - After Creative Director acceptance and issue closure, GitHub Actions moves it to **Done**. Closing or reopening an issue is never a substitute for human approval.

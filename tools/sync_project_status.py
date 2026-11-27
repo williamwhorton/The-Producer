@@ -11,6 +11,13 @@ import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+if __package__:
+    from .sync_assignment import COMMAND, REPLACE_COMMAND, synchronize
+    from .sync_issue_metadata import GitHub as MetadataAPI, MetadataError
+else:
+    from sync_assignment import COMMAND, REPLACE_COMMAND, synchronize
+    from sync_issue_metadata import GitHub as MetadataAPI, MetadataError
+
 STATUSES = ("Backlog", "Ready", "In Progress", "In Review", "Blocked", "Done")
 COMMAND_RE = re.compile(r"^/status\s+(Backlog|Ready|In Progress|In Review|Blocked|Done)\s*$", re.I)
 CLOSING_RE = re.compile(
@@ -61,6 +68,31 @@ def parse_bootstrap(value):
     return result
 
 
+def owner_issue_comment(event_name, payload, owner):
+    if event_name != "issue_comment" or payload.get("action") != "created":
+        return False
+    issue = payload.get("issue", {})
+    if "pull_request" in issue or not issue.get("number"):
+        return False
+    author = (payload.get("comment", {}).get("user") or {}).get("login", "")
+    if author.casefold() != owner.casefold():
+        print(f"Ignoring issue comment by non-owner {author!r}")
+        return False
+    return True
+
+
+def assignment_command(event_name, payload, owner):
+    if not owner_issue_comment(event_name, payload, owner):
+        return None
+    command = payload["comment"].get("body", "").strip()
+    if command not in (COMMAND, REPLACE_COMMAND):
+        return None
+    issue = payload["issue"]
+    if issue.get("state") != "open":
+        raise SyncError("Assignment commands require an open issue")
+    return int(issue["number"]), issue.get("body"), command == REPLACE_COMMAND
+
+
 def decide_event(event_name, payload, owner, repo):
     """Resolve requested status transitions without network calls."""
     action = payload.get("action")
@@ -71,14 +103,8 @@ def decide_event(event_name, payload, owner, repo):
         mapping = {"opened": "Backlog", "closed": "Done", "reopened": "Backlog"}
         return {int(issue["number"]): mapping[action]} if action in mapping else {}
 
-    if event_name == "issue_comment" and action == "created":
-        issue = payload.get("issue", {})
-        if "pull_request" in issue or not issue.get("number"):
-            return {}
-        author = payload.get("comment", {}).get("user", {}).get("login", "")
-        if author.casefold() != owner.casefold():
-            print(f"Ignoring status comment by non-owner {author!r}")
-            return {}
+    if owner_issue_comment(event_name, payload, owner):
+        issue = payload["issue"]
         status = comment_status(payload.get("comment", {}).get("body", ""))
         if not status:
             return {}
@@ -174,22 +200,21 @@ query ($owner: String!, $number: Int!) {
 }
 """
 ISSUE_QUERY = """
-query ($owner: String!, $repo: String!, $number: Int!) {
+query ($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
       id
-      projectItems(first: 100) {
+      projectItems(first: 100, after: $cursor) {
         nodes {
           id
           project { id }
-          fieldValues(first: 30) {
-            nodes {
-              ... on ProjectV2ItemFieldSingleSelectValue {
-                name field { ... on ProjectV2SingleSelectField { id } }
-              }
+          fieldValueByName(name: "Status") {
+            ... on ProjectV2ItemFieldSingleSelectValue {
+              name field { ... on ProjectV2SingleSelectField { id } }
             }
           }
         }
+        pageInfo { hasNextPage endCursor }
       }
     }
   }
@@ -227,24 +252,35 @@ class Project:
             raise SyncError(f"Project Status is missing options: {', '.join(sorted(missing))}")
 
     def find_item(self, number):
-        data = self.api.graphql(
-            ISSUE_QUERY, {"owner": self.owner, "repo": self.repo, "number": number}
-        )
-        issue = data.get("repository", {}).get("issue")
-        if not issue:
-            raise SyncError(f"Issue #{number} not found")
-        for item in issue["projectItems"]["nodes"]:
-            if item.get("project", {}).get("id") != self.id:
-                continue
-            for field in item.get("fieldValues", {}).get("nodes", []):
-                if field and field.get("field", {}) and field["field"].get("id") == self.field:
-                    return item["id"], field["name"], issue["id"]
-            return item["id"], None, issue["id"]
-        return None, None, issue["id"]
+        variables = {"owner": self.owner, "repo": self.repo, "number": number, "cursor": None}
+        cursors = set()
+        while True:
+            data = self.api.graphql(ISSUE_QUERY, variables)
+            issue = data.get("repository", {}).get("issue")
+            if not issue:
+                raise SyncError(f"Issue #{number} not found")
+            items = issue["projectItems"]
+            for item in items["nodes"]:
+                if item.get("project", {}).get("id") != self.id:
+                    continue
+                field = item["fieldValueByName"]
+                if field is not None and (field.get("field") or {}).get("id") != self.field:
+                    raise SyncError(f"#{number}: Project Status field could not be identified")
+                return item["id"], field["name"] if field else None, issue["id"]
+            info = items["pageInfo"]
+            if info["hasNextPage"] is False:
+                return None, None, issue["id"]
+            cursor = info["endCursor"]
+            if info["hasNextPage"] is not True or not cursor or cursor in cursors:
+                raise SyncError(f"#{number}: invalid Project card pagination")
+            cursors.add(cursor)
+            variables["cursor"] = cursor
 
-    def update(self, number, status, *, preserve_open=False):
+    def update(self, number, status, *, preserve_open=False, only_from=None):
         status = normalize_status(status)
         item, current, issue = self.find_item(number)
+        if only_from is not None and current not in only_from:
+            raise SyncError(f"#{number}: refused {status} from current Status {current}")
         if preserve_open and current and current != "Done":
             print(f"#{number}: keep existing {current}")
             return
@@ -305,7 +341,24 @@ def main():
         raise SyncError("Missing GITHUB_EVENT_PATH")
     with open(path, encoding="utf-8") as file:
         event = json.load(file)
-    updates = decide_event(os.environ.get("GITHUB_EVENT_NAME", ""), event, owner, repo)
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    # Use the same owner check as /status. The issue number and body come from
+    # GitHub's comment-created event, never from a command argument.
+    if event_name == "issue_comment" and event.get("comment", {}).get("body", "").strip() in (
+        COMMAND, REPLACE_COMMAND,
+    ):
+        command = assignment_command(event_name, event, owner)
+        if command:
+            if os.environ.get("GITHUB_RUN_ATTEMPT", "1") != "1":
+                raise SyncError("Assignment commands require a fresh owner comment; do not rerun historical jobs")
+            issue_number, body, replace = command
+            try:
+                synchronize(MetadataAPI(api.token), project, issue_number, body, replace=replace)
+            except (MetadataError, KeyError, TypeError, AttributeError) as error:
+                detail = str(error) if isinstance(error, MetadataError) else "Unexpected GitHub API response"
+                raise SyncError(detail) from error
+        return 0
+    updates = decide_event(event_name, event, owner, repo)
     for number, status in updates.items():
         issue = api.issue(owner, repo, number)
         if status == "Done" and issue["state"] != "closed":
