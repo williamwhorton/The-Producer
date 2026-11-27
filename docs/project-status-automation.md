@@ -1,6 +1,6 @@
 # GitHub Project Status automation
 
-**Issues:** [#11](https://github.com/williamwhorton/The-Producer/issues/11), [#107](https://github.com/williamwhorton/The-Producer/issues/107), [#114](https://github.com/williamwhorton/The-Producer/issues/114)
+**Issues:** [#11](https://github.com/williamwhorton/The-Producer/issues/11), [#107](https://github.com/williamwhorton/The-Producer/issues/107), [#114](https://github.com/williamwhorton/The-Producer/issues/114), [#119](https://github.com/williamwhorton/The-Producer/issues/119)
 **Workflow:** `.github/workflows/project-status-sync.yml`
 **Script:** `tools/sync_project_status.py`
 
@@ -167,8 +167,8 @@ Use the GitHub UI, the connected GitHub integration, or an authenticated GitHub 
 gh issue comment 4 --repo williamwhorton/The-Producer --body "/status In Progress"
 ```
 
-- **Lead:** `Ready` when scope, approvals and dependencies are in place; `Blocked` when dependencies prevent work; `Backlog` on deferral.
-- **Developer/Architect:** `In Progress` when actually starting; `Blocked` when waiting on a concrete prerequisite.
+- **Lead:** `Ready` when scope is specified, work is authorized and native dependency links are reconciled, even if those dependencies are unfinished; `Blocked` for concrete impediments that need intervention; `Backlog` on deferral.
+- **Developer/Architect:** `In Progress` when actually starting (the host claims work in the Ready pilot); `Blocked` when active work cannot proceed.
 - **Reviewer:** `In Review` when reviewing without a PR; a ready PR with a closing reference already does this automatically.
 - **Done** is tied to **issue closure** after acceptance; attempting `/status Done` on an open issue fails instead of making misleading board state.
 - A posted comment is not proof of a status change. Confirm the event's run succeeded and the intended card shows the expected status. If GitHub CLI authentication or comment permissions are missing, report the missing transition to the Lead; do not claim the board was updated.
@@ -198,13 +198,13 @@ Selection-ready implementation; prerequisites: none
 Describe the approved deliverable and acceptance criteria here.
 ````
 
-All five keys are required. Use the exact native Type, Priority and Workstream option names; use one Workstream for a single-select field or one or more for a multi-select field. Use a JSON boolean for approval (`true` → `Yes`, `false` → `No`). Use distinct local issue numbers in `prerequisites`, or `[]` for none. With a nonempty list the first nonempty line must be `Selection-ready implementation; prerequisites: native`. Existing intake hints and narrative references do not declare assignments or authorize changes. The existing `agent:developer` label, assignee, approved scope marker and accepted-closure requirements still apply.
+All five keys are required. Use the exact native Type, Priority and Workstream option names; use one Workstream for a single-select field or one or more for a multi-select field. Use a JSON boolean for approval (`true` → `Yes`, `false` → `No`). Use distinct local issue numbers in `prerequisites`, or `[]` for none. With a nonempty list the first nonempty line must be `Selection-ready implementation; prerequisites: native`. Existing intake hints and narrative references do not declare assignments or authorize changes. The existing `agent:developer` label, assignee and approved scope marker requirements still apply.
 
 The workflow uses the existing `PROJECTS_TOKEN` and native API access already used by the [metadata migration](issue-metadata-migration.md#one-time-setup). It does not create field options or require new permissions. Ordinary sync adds missing values and dependencies and refuses to overwrite a conflicting populated field or remove any dependency. After inspecting the conflicts, the owner can explicitly authorize replacement with exactly `/assignment sync --replace` on that same issue. Unrelated native fields are preserved. Closed issues, active (`In Progress` or `In Review`) cards and issues with open linked PRs are refused.
 
-The workflow reads back matching native metadata and dependencies, checks the approval and accepted prerequisite gates, then verifies `Ready` through the normal Project Status writer. An already matching Ready assignment needs no writes. If a Ready card needs changes, it is verified Blocked before metadata writes. If a write or verification fails, prior native changes may remain; read the Actions log and live issue/card, fix the cause, review present values, and post a fresh command to finish. Re-running an old assignment job is refused. If the status response is lost, the workflow attempts to withdraw any observed Ready result. An outage can prevent that read or write too. Stop dispatch and verify the actual card before resuming. Pause dispatch for the target and avoid manual edits/status changes while replacing metadata: GitHub does not offer an atomic transaction spanning issues, dependencies and Projects.
+The workflow reads back the native metadata and exact dependency links, verifies approval and local issue identities, and rejects detectable dependency cycles before verifying `Ready` through the normal Project Status writer. Prerequisites can still be open at publication. An already matching Ready assignment needs no writes. If a Ready card needs changes, it is verified Blocked before metadata writes. If a write or verification fails, prior native changes may remain; read the Actions log and live issue/card, fix the cause, review present values, and post a fresh command to finish. Re-running an old assignment job is refused. If the status response is lost, the workflow attempts to withdraw any observed Ready result. An outage can prevent that read or write too. Stop dispatch and verify the actual card before resuming. Pause dispatch for the target and avoid manual edits/status changes while replacing metadata: GitHub does not offer an atomic transaction spanning issues, dependencies and Projects.
 
-The runner still independently checks the live card, native metadata and prerequisite acceptance. Publishing Ready does not start a runner or authorize a merge.
+The runner independently checks the live card, native metadata and [accepted prerequisite completion](agent-orchestration.md#read-only-ready-selection). A Ready dependent waits while independent eligible work can be selected. Closing a prerequisite without accepted completion still prevents dispatch. Publishing Ready does not start a runner or authorize a merge.
 
 ## Reconciliation and failure recovery
 

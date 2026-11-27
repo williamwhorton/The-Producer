@@ -90,10 +90,10 @@ The board is **not** expected to be maintained by the Creative Director manually
 
 ## Ready versus Backlog — including Creative Director decisions
 
-**Ready** means a bounded, approved-to-investigate **task, Spike or Design Decision can begin now** without needing an unfinished issue's deliverable. It is **not** limited to the next available agent implementation slot. The Creative Director may work Ready decision stories **concurrently** with Developer/Architect/Lead agents; assign those issues to `williamwhorton` so they are visible as human-owned decisions.
+**Ready** means the work is bounded, specified and authorized. A Ready Developer assignment may still be waiting on native **Blocked by** prerequisites; it is eligible to start only after their accepted completion. The Creative Director may work independently actionable Ready decision stories **concurrently** with Developer/Architect/Lead agents; assign those issues to `williamwhorton` so they are visible as human-owned decisions.
 
-- **Readiness is not creative approval.** An unblocked Design Decision can be Ready for research/decision while every implementation story that depends on its result remains in Backlog or Blocked.
-- **Backlog** contains concrete, traceable *future* MVP work across every function from design through release, including stories that are not yet Ready due to dependencies, sequencing or current priorities.
+- **Readiness is not creative approval.** A Design Decision can be Ready for research while implementation that needs its unapproved outcome remains in Backlog.
+- **Backlog** contains concrete, traceable *future* MVP work across every function from design through release, including assignments not yet specified, authorized or scheduled for publication.
 - **Blocked** records an actual, specific impediment to work underway or selected for execution. An unscheduled future issue with dependencies can remain Backlog rather than cluttering Blocked.
 - **In Progress** begins only when work actually starts; **In Review** means review/approval awaits; **Done** needs acceptance.
 - Keep a **complete release path**, not merely a near-term sprint queue. The Lead maintains [MVP-to-release delivery plan](mvp-delivery-plan.md), reviews requirement coverage regularly, avoids duplicate issues, and adds bounded work/spikes when a real gap arises.
@@ -105,14 +105,14 @@ Keep the board's **Status** values:
 
 `Backlog` → `Ready` → `In Progress` → `In Review` → `Done`
 
-Use `Blocked` whenever an unresolved dependency prevents progress. A blocked High-priority issue stays blocked until its prerequisite is approved. The board should be grouped by Status.
+Use native **Blocked by** links for prerequisites. A Ready card can stay Ready while waiting on those links. Use the `Blocked` status for a concrete impediment to active or selected work that needs intervention. The board should be grouped by Status.
 
 Do not automatically move issues to Done when a PR opens. Done requires acceptance criteria, actual test evidence and independent review under `AGENTS.md`.
 
 ## Agent triage rules
 
 1. Read the Type, Priority, Workstream, Status, approval field, issue body, dependencies and relevant decisions before planning.
-2. Do not select issues that are Blocked or require an unapproved design decision, regardless of priority.
+2. Do not dispatch issues that are Blocked, have prerequisites without accepted completion or require an unapproved design decision, regardless of priority.
 3. For a Spike, gather evidence and **implement disposable experimental code when required by the approved issue**. Do not merge unapproved *production* code or canonize architecture as a side effect.
 4. For a Design Decision, present alternatives and wait for Creative Director approval before implementation.
 5. Do not fabricate field values, dates, approvals or estimates. If a crucial value is missing, make a recommendation and flag it.

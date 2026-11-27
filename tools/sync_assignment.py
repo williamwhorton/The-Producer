@@ -4,12 +4,12 @@ import re
 
 if __package__:
     from .ready_selection import (
-        APPROVAL_FIELD, CLOSURE, ISSUE_PRS, closure_exclusion, exclusion, native_options, valid_name,
+        APPROVAL_FIELD, ISSUE_PRS, exclusion, native_options, valid_name,
     )
     from .sync_issue_metadata import MetadataError, VALID_PRIORITIES, VALID_TYPES, current_type
 else:
     from ready_selection import (
-        APPROVAL_FIELD, CLOSURE, ISSUE_PRS, closure_exclusion, exclusion, native_options, valid_name,
+        APPROVAL_FIELD, ISSUE_PRS, exclusion, native_options, valid_name,
     )
     from sync_issue_metadata import MetadataError, VALID_PRIORITIES, VALID_TYPES, current_type
 
@@ -137,8 +137,9 @@ def blockers(api, path, issue):
 def local_issue(api, path, number):
     issue = api.request(f"{path}/{number}")
     issue_id = issue["id"]
-    if ("pull_request" in issue or issue["number"] != number or issue["url"] !=
-            f"https://api.github.com{path}/{number}" or type(issue_id) is not int or issue_id <= 0):
+    if ("pull_request" in issue or type(issue["number"]) is not int or issue["number"] != number
+            or issue["url"] != f"https://api.github.com{path}/{number}"
+            or type(issue_id) is not int or issue_id <= 0):
         raise MetadataError(f"#{number}: expected a local issue")
     return issue
 
@@ -146,7 +147,7 @@ def local_issue(api, path, number):
 def check_cycles(api, path, target_id, roots):
     # An iterative DFS keeps a shared prerequisite from being mistaken for a cycle.
     visiting = {target_id}
-    done = set()
+    verified_numbers = {}
     stack = [(target_id, iter(roots))]
     while stack:
         parent, children = stack[-1]
@@ -154,21 +155,23 @@ def check_cycles(api, path, target_id, roots):
         if child is None:
             stack.pop()
             visiting.remove(parent)
-            done.add(parent)
             continue
         issue_id = child["id"]
         if issue_id in visiting:
             raise MetadataError("Self or cyclic native prerequisite")
-        if issue_id in done:
-            continue
         number = child["number"]
         if type(number) is not int or not 0 < number < 2**31:
             raise MetadataError("Invalid native prerequisite number")
         if child["url"] != f"https://api.github.com{path}/{number}":
             raise MetadataError("Cannot verify an external prerequisite chain")
+        if issue_id in verified_numbers:
+            if verified_numbers[issue_id] != number:
+                raise MetadataError("Native prerequisite identity changed")
+            continue
         current = local_issue(api, path, number)
         if current["id"] != issue_id:
             raise MetadataError("Native prerequisite identity changed")
+        verified_numbers[issue_id] = number
         visiting.add(issue_id)
         stack.append((issue_id, iter(blockers(api, path, current).values())))
 
@@ -221,6 +224,8 @@ def synchronize(api, project, number, body, *, replace=False):
         for dependency in data["prerequisites"]:
             row = local_issue(api, path, dependency)
             wanted[row["id"]] = row
+        if len(wanted) != len(data["prerequisites"]):
+            raise MetadataError("Ambiguous native prerequisite identity")
         extra = existing.keys() - wanted.keys()
         missing = wanted.keys() - existing.keys()
         if extra and not replace:
@@ -261,11 +266,7 @@ def synchronize(api, project, number, body, *, replace=False):
         reason = exclusion(current, actual_fields, list(actual.values()))
         if reason:
             raise MetadataError(f"#{number}: native metadata verified; not Ready: {reason}")
-        for row in actual.values():
-            closure = project.api.graphql(CLOSURE, {**variables, "number": row["number"]})
-            reason = closure_exclusion(closure["repository"]["issue"])
-            if reason:
-                raise MetadataError(f"#{number}: prerequisite #{row['number']} not accepted: {reason}")
+        # Ready publishes approved scope and valid links. Dispatch checks accepted completion.
         check_cycles(api, path, current["id"], actual.values())
         latest, latest_status = check_editable()
         if latest["body"] != body or latest["updated_at"] != current["updated_at"]:

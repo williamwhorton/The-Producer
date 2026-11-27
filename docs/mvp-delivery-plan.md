@@ -26,7 +26,7 @@ The plan is **comprehensive by workstream**, not a promise that every candidate 
 | Project Status | Interpretation |
 |---|---|
 | **Backlog** | Known future work, including scoped implementation stories awaiting decisions, sequencing or selection |
-| **Ready** | A bounded **task or decision can begin now**, independently of other unfinished deliverables. Ready does **not** approve its proposed output or authorize game mechanics |
+| **Ready** | Work is bounded, specified and authorized. A Ready assignment can wait on native **Blocked by** links; dispatch requires accepted completion of every prerequisite. Ready does **not** approve a decision's proposed output or authorize game mechanics |
 | **In Progress** | Owner/agent actually started and is producing work |
 | **In Review** | Implementation PR or design proposal awaiting independent/human evaluation |
 | **Blocked** | A specific unresolved dependency is actively preventing previously queued/attempted work; record the actual reason |
