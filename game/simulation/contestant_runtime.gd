@@ -3,6 +3,7 @@ extends RefCounted
 
 const Scheduler = preload("res://simulation/event_scheduler.gd")
 const House = preload("res://simulation/house_layout.gd")
+const ObservationProjector = preload("res://observation/observation_projector.gd")
 
 enum Motive { UNDERSTAND_CUE, KEEP_DISTANCE }
 # These describe perceived cues, not the true cause of an event.
@@ -34,13 +35,16 @@ var _departed: Dictionary[StringName, Dictionary] = {}
 var _temperatures: Dictionary[StringName, Temperature] = {}
 var _telephone: Dictionary
 var _last_ring: Dictionary = {}
+var _observations: ObservationProjector
 
 
 func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: Dictionary,
 		trusted_contacts: Dictionary = {}, stay_motivations: Dictionary = {},
-		exit_id: StringName = &"front", preparations: Dictionary = {}) -> void:
+		exit_id: StringName = &"front", preparations: Dictionary = {},
+		observations: ObservationProjector = null) -> void:
 	_clock = clock
 	_exit_id = exit_id
+	_observations = observations if observations != null else ObservationProjector.new([], [])
 	# Installed capabilities are supplied at setup; live commands cannot add them.
 	for room: StringName in preparations.get("thermostat_rooms", []):
 		if House.ROOMS.has(room):
@@ -72,6 +76,14 @@ func _init(cast: Dictionary[StringName, Dictionary], clock: Scheduler, motives: 
 	_clock.schedule_autonomous(_clock.current_tick() + 1, _step)
 
 
+func camera_snapshot() -> Dictionary:
+	return _observations._project_cameras(_clock.current_tick(), _actors)
+
+
+func take_audible_events() -> Array[Dictionary]:
+	return _observations._take_audible_events(_clock.current_tick())
+
+
 func queue_temperature(room: StringName, setting: Temperature) -> int:
 	return _clock.queue_live_trigger(
 		func() -> bool: return _temperatures.has(room) and setting in Temperature.values(),
@@ -93,7 +105,9 @@ func _ring() -> void:
 	var room := House.room_at(cell)
 	# The headless acoustic fixture covers the source room only. This event is
 	# an audible signal in the world even when no contestant is there to hear it.
-	_last_ring = {"kind": &"telephone_ring", "cell": cell, "room": room, "tick": _clock.current_tick()}
+	var tick := _clock.current_tick()
+	_last_ring = {"kind": &"telephone_ring", "cell": cell, "room": room, "tick": tick}
+	_observations._capture_sound(_last_ring, tick)
 	var witnesses: Array[StringName] = []
 	for id: StringName in _actors:
 		if House.room_at(_actors[id].cell) == room:
@@ -206,6 +220,7 @@ func _step() -> void:
 		var route: Array[Vector3i] = actor.route
 		if not route.is_empty():
 			actor.cell = route.pop_front()
+			actor["last_move_tick"] = _clock.current_tick()
 		else:
 			_choose(actor)
 		if actor.activity == &"leave" and actor.route.is_empty():

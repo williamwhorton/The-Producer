@@ -67,7 +67,7 @@ is not used at startup or offered as another playable property.
 | Path | Responsibility in this slice |
 | --- | --- |
 | `main.tscn`, `main.gd` | Load the authored scenario, compose the world view and HUD, pass the projected floor plan to the renderer and translate room selection to a HUD label. |
-| `observation/` | Project the producer-known floor plan, room labels and optional static route example, with no private state. Future live evidence must follow [ADR-0004](../docs/decisions/ADR-0004-producer-observation-boundary.md). |
+| `observation/` | Project the producer-known floor plan and, separately, the runtime's [authorized live evidence](simulation/README.md#live-producer-observations-39) under ADR-0004/0005. |
 | `world/` | Preview geometry, camera, lighting, cutaway, picking and floor highlight. The adapter emits a room ID, not a collider or 3D position. |
 | `ui/` | Title, room label and controls hint; no world or domain script dependency. |
 | `scenarios/` | Local authored scenario input; no gameplay scene or saved state. |

@@ -242,3 +242,36 @@ at 2× with the same tick inputs. Expected first-ring fear: 2 comfortable,
 post-departure isolation, invalid commands and recovery via both comfort reset
 and leaving the room. All numbers and room-level hearing are fixture choices.
 P1 floorboards, P4 popping bulb and P5 overnight placement remain separate slices.
+
+## Live producer observations (#39)
+
+For each simulation run, the application can provide a new
+`observation/observation_projector.gd` instance to `ContestantRuntime`. Pass the
+validated scenario's `surveillance.camera_rooms` and the authorized house audio
+rooms (`House.ROOMS.keys()` for this house). With no supplied projector, both
+sources are disabled. Camera and audio coverage are independent.
+
+- After advancing the simulation, call `camera_snapshot()`. Its tick and
+  detached contestant records replace the previous frame. Each marker contains
+  only the contestant ID, camera source, tick, room/cell, and whether the
+  contestant actually moved on that tick. A missing marker means there is no
+  current camera evidence; do not infer a destination or retain a live marker.
+- Call `take_audible_events()` after each advance to consume the ordered batch
+  of authorized ring cues once. Each contains only the cue kind, house audio
+  source, occurrence tick, and room/cell. `current` means the cue occurred on
+  the latest simulation tick; `stale` is an earlier cue delivered in this batch,
+  not an ongoing sound. Multiple rings can occur before a read.
+- The projector retains only the words captured by an authorized source while
+  its one listening focus is on that stream. The tests supply synthetic room
+  speech and local phone speech through the trusted capture path; gameplay
+  currently produces neither. The ring changes neither focus nor dialogue
+  history. The projector provides no playback or missed-speech lookup.
+
+The existing preview remains static. Issue #40 can use these observations for
+presentation without reading private actor or event dictionaries.
+
+```sh
+timeout 60s godot --headless --path game --script res://tests/live_observations.gd
+```
+
+Expect `PASS: live camera motion and departure, localized ringing, coverage, and attended-only text`.
